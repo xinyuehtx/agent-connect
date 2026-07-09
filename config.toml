@@ -1,0 +1,20 @@
+# ⚠️ 此文件仅供开发参考
+# 生产环境请使用: cc-router init
+# 配置文件位置: ~/.cc-connect-router/config.toml
+
+[[projects]]
+name = "router"
+
+[projects.agent]
+type = "opencode"
+
+[projects.agent.options]
+work_dir = "/Users/huangtengxiao/Documents/code/connect"
+mode = "default"
+
+[[projects.platforms]]
+type = "dingtalk"
+
+[projects.platforms.options]
+client_id = "<your-dingtalk-client-id>"
+client_secret = "<your-dingtalk-client-secret>"

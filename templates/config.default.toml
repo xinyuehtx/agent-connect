@@ -1,0 +1,20 @@
+# cc-connect-router 默认配置
+# 生成位置: ~/.cc-connect-router/config.toml
+# 使用 cc-router config set <key> <value> 修改配置
+
+[[projects]]
+name = "router"
+
+[projects.agent]
+type = "opencode"
+
+[projects.agent.options]
+work_dir = ""
+mode = "default"
+
+[[projects.platforms]]
+type = "dingtalk"
+
+[projects.platforms.options]
+client_id = ""
+client_secret = ""
