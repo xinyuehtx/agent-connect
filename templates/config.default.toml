@@ -6,7 +6,15 @@
 [web]
 host = "127.0.0.1"
 port = 8787
-token = ""              # 留空则首次 serve 时自动生成并打印
+token = ""              # 可选：留空 = 本机开放访问（仅 127.0.0.1）；填写则需令牌登录
+
+# ── 主动通知（仅在这两种情况下推送，其余不打扰）──
+[notify]
+enabled = true
+scope = "all"                    # all | controllable（仅通知你远控的 tmux 会话）
+on_needs_confirm = true          # 会话进入 waiting（需你确认/输入）时推送
+on_task_done = true              # 会话 busy → idle（任务完成）时推送
+cooldown_ms = 30000              # 同一会话同类通知的冷却
 
 # ── 信使 Agent（Vercel AI SDK）──
 [messenger]

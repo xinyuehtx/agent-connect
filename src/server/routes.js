@@ -72,13 +72,18 @@ function registerRoutes(app, deps) {
   const {
     plane, token, sse, agent, config,
   } = deps;
+  // 令牌可选：为空则视为"本机开放模式"，所有鉴权直通（仅监听 127.0.0.1 时安全）。
+  const authOk = (provided) => !token || checkToken(provided, token);
 
   // 公开健康检查
   app.get('/healthz', async () => ({ ok: true }));
 
-  // 登录：用主令牌换 cookie
+  // 登录：用主令牌换 cookie（开放模式下无需登录，前端不会走到这里）
   app.post('/api/login', async (req, reply) => {
     const body = req.body || {};
+    if (!token) {
+      return reply.code(204).send();
+    }
     if (!checkToken(body.token, token)) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'bad token' } });
     }
@@ -93,7 +98,7 @@ function registerRoutes(app, deps) {
     return reply.code(204).send();
   });
 
-  // 鉴权：master token（cookie 或 Bearer）。/im/handle 单独用 Bearer 校验。
+  // 鉴权：master token（cookie 或 Bearer）。令牌为空 = 开放模式，直通。
   app.addHook('preHandler', async (req, reply) => {
     if (!req.url.startsWith('/api/')) {
       return undefined;
@@ -102,7 +107,7 @@ function registerRoutes(app, deps) {
       return undefined;
     }
     const provided = extractToken({ headers: req.headers, cookies: req.cookies || {} });
-    if (!checkToken(provided, token)) {
+    if (!authOk(provided)) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'unauthorized' } });
     }
     return undefined;
@@ -178,7 +183,7 @@ function registerRoutes(app, deps) {
   // 单独 Bearer 校验（preHandler 只管 /api/*）。
   app.post('/im/handle', async (req, reply) => {
     const provided = extractToken({ headers: req.headers, cookies: req.cookies || {} });
-    if (!checkToken(provided, token)) {
+    if (!authOk(provided)) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'unauthorized' } });
     }
     if (!agent) {
@@ -186,6 +191,9 @@ function registerRoutes(app, deps) {
     }
     const body = req.body || {};
     const platform = body.platform || 'dingtalk';
+    if (deps.onInbound) {
+      deps.onInbound(body.sessionKey, platform);
+    }
     const gate = config.getGate(platform);
     const cls = deps.classify(body.text, body.senderId, gate);
 

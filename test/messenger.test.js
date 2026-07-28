@@ -18,6 +18,8 @@ const { historyToEvents, mask } = require('../src/server/routes');
 const { toSummary, toEvent } = require('../src/lib/control-plane');
 const { gateFor } = require('../src/lib/app-config');
 const { escapeHtml, sendViaCcConnect } = require('../src/lib/im/deliver');
+const { SessionNotifier } = require('../src/lib/notify/watcher');
+const { EventEmitter } = require('node:events');
 
 function tmpFile(name) {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-')), name);
@@ -244,6 +246,65 @@ test('deliver.escapeHtml escapes markup', () => {
 test('deliver.sendViaCcConnect refuses empty payload', () => {
   const r = sendViaCcConnect({});
   assert.strictEqual(r.ok, false);
+});
+
+/* ---------------- notifier ---------------- */
+
+function mkNotifier(cfg) {
+  const plane = new EventEmitter();
+  const sent = [];
+  const n = new SessionNotifier({
+    plane,
+    cfg: {
+      enabled: true, scope: 'all', on_needs_confirm: true, on_task_done: true, cooldown_ms: 0, ...cfg,
+    },
+    runtime: { project: 'messenger' },
+    getMessages: async () => [],
+    send: (a) => { sent.push(a); return { ok: true }; },
+  });
+  n.start();
+  const ev = (id, status, extra) => plane.emit('event', {
+    type: 'session.updated',
+    session: {
+      sessionId: id, name: 'demo', cwd: '/x/proj', status, controllable: true, ...extra,
+    },
+  });
+  return { sent, ev };
+}
+
+test('notifier: only fires on needs-confirm (waiting) and task-done (busy→idle)', async () => {
+  const { sent, ev } = mkNotifier();
+  ev('a', 'busy'); // seed → no send
+  ev('a', 'idle'); // busy→idle → task_done
+  ev('b', 'idle'); // seed
+  ev('b', 'waiting'); // → needs_confirm
+  ev('a', 'busy'); // idle→busy → NOT a trigger
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(sent.length, 2);
+  assert.match(sent[0].message, /任务完成/);
+  assert.match(sent[1].message, /需要你确认/);
+});
+
+test('notifier: seed (first observation) never notifies', async () => {
+  const { sent, ev } = mkNotifier();
+  ev('x', 'waiting'); // first time we see x → seed only, no send
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(sent.length, 0);
+});
+
+test('notifier: scope=controllable skips non-controllable sessions', async () => {
+  const { sent, ev } = mkNotifier({ scope: 'controllable' });
+  ev('c', 'busy', { controllable: false });
+  ev('c', 'idle', { controllable: false });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(sent.length, 0);
+});
+
+test('notifier: disabled does not subscribe', async () => {
+  const { sent, ev } = mkNotifier({ enabled: false });
+  ev('d', 'busy'); ev('d', 'idle');
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(sent.length, 0);
 });
 
 test('historyToEvents maps user/assistant + tool calls', () => {

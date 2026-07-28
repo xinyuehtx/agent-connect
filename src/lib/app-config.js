@@ -24,6 +24,13 @@ const DEFAULTS = {
     cancel_words: ['取消', 'no', 'n'],
     confirm_ttl_ms: 300000,
   },
+  notify: {
+    enabled: true,
+    scope: 'all', // all | controllable
+    on_needs_confirm: true,
+    on_task_done: true,
+    cooldown_ms: 30000,
+  },
 };
 
 /**
@@ -52,6 +59,7 @@ function loadAppConfig() {
         dingtalk: { ...DEFAULTS.dingtalk, ...(im.dingtalk || {}) },
       },
     },
+    notify: { ...DEFAULTS.notify, ...(raw.notify || {}) },
     raw,
   };
 }

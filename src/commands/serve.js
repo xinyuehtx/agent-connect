@@ -1,7 +1,6 @@
 'use strict';
 
 const path = require('path');
-const crypto = require('crypto');
 
 const { CONFIG_DIR, CONFIG_FILE } = require('../lib/paths');
 const {
@@ -15,28 +14,16 @@ const { FileHistoryStore } = require('../lib/messenger/history-store');
 const { Messenger } = require('../lib/messenger/agent');
 const { AgentConductor } = require('../lib/messenger/conductor');
 const { classifyMessage } = require('../lib/im/gate');
+const { SessionNotifier } = require('../lib/notify/watcher');
 const { validateProviderConfig } = require('../lib/messenger/provider');
 
 /**
- * 确保 web.token 存在（缺失则生成、写回、打印）。
+ * Web 令牌为可选：留空则控制台在 127.0.0.1 上开放访问（个人自用），不再强制生成。
  * @param {object} app 规范化配置
- * @returns {string}
+ * @returns {string} 令牌（可能为空字符串）
  */
-function ensureToken(app) {
-  if (app.web.token) {
-    return app.web.token;
-  }
-  const token = crypto.randomBytes(24).toString('hex');
-  const raw = loadConfig();
-  raw.web = { ...(raw.web || {}), token };
-  saveConfig(raw);
-  app.web.token = token;
-  console.log('');
-  console.log('  ┌─ 已生成 Web 访问令牌（首次） ─────────────────');
-  console.log(`  │  ${token}`);
-  console.log('  └───────────────────────────────────────────────');
-  console.log('');
-  return token;
+function resolveToken(app) {
+  return app.web.token || '';
 }
 
 /**
@@ -48,7 +35,7 @@ async function serve(opts = {}) {
   process.on('unhandledRejection', (e) => console.error('[cc-router] unhandledRejection:', e && e.message));
 
   const app = loadAppConfig();
-  const token = ensureToken(app);
+  const token = resolveToken(app);
   const host = opts.host || app.web.host;
   const port = Number(opts.port || app.web.port);
 
@@ -143,6 +130,10 @@ async function serve(opts = {}) {
     text, senderId, gate, pendingCount: pending.get(conversationKey).length,
   });
 
+  // 运行态：记住最近一次 IM 会话，作为主动通知的默认推送目标
+  const runtime = { lastSessionKey: '', project: config.getProjectName() };
+  const onInbound = (sessionKey) => { if (sessionKey) runtime.lastSessionKey = sessionKey; };
+
   const server = await buildHttp({
     plane,
     token,
@@ -152,21 +143,34 @@ async function serve(opts = {}) {
     },
     config,
     classify,
+    onInbound,
   });
 
   await plane.start();
   await server.listen({ host, port });
 
+  // 主动通知：仅在"需要确认(waiting)"与"任务完成(busy→idle)"时推送
+  const notifier = new SessionNotifier({
+    plane,
+    cfg: app.notify,
+    runtime,
+    getMessages: (id, o) => plane.getMessages(id, o),
+  });
+  notifier.start();
+
   const v = validateProviderConfig(messengerCfg);
-  console.log(`[cc-router] 控制台已启动: http://${host}:${port}`);
+  console.log(`[cc-router] 控制台已启动: http://${host}:${port}${token ? '' : '  (开放模式 · 仅本机)'}`);
   if (!v.ok) {
     console.log(`[cc-router] ⚠ 信使 LLM 未就绪（${v.reason}）——请在控制台「设置 → LLM Provider」中配置。`);
+  }
+  if (app.notify.enabled) {
+    console.log(`[cc-router] 主动通知已开启（needs-confirm / task-done，scope=${app.notify.scope}）`);
   }
   console.log(`[cc-router] 配置文件: ${CONFIG_FILE}`);
 
   const shutdown = async (sig) => {
     console.log(`\n[cc-router] ${sig}，正在关闭…`);
-    try { await plane.stop(); await server.close(); } catch (e) { /* ignore */ }
+    try { notifier.stop(); await plane.stop(); await server.close(); } catch (e) { /* ignore */ }
     process.exit(0);
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
