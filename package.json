@@ -1,6 +1,6 @@
 {
-  "name": "@tengxiaohtx/cc-connect-router",
-  "version": "1.1.0",
+  "name": "@tengxiaohtx/connect",
+  "version": "1.1.1",
   "description": "CLI tool for managing cc-connect-router configuration",
   "type": "commonjs",
   "bin": {
@@ -30,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tengxiaohtx/cc-connect-router.git"
+    "url": "git+ssh://git@github.com/xinyuehtx/connect.git"
   },
   "publishConfig": {
     "access": "public"

@@ -52,7 +52,7 @@ graph LR
 ## 📦 安装
 
 ```bash
-npm install -g cc-connect-router
+npm install -g @tengxiaohtx/connect
 ```
 
 安装后即可使用 `cc-router` 命令行工具。
