@@ -205,7 +205,13 @@ function registerRoutes(app, deps) {
       return reply.send({ reply: `用法：${gate.command_prefix || ''} <指令>`.trim() });
     }
     try {
-      const result = await agent.conductor.handle(agent.conversationKey, routed);
+      const ctx = {
+        sessionKey: body.sessionKey,
+        platform,
+        project: config.getProjectName ? config.getProjectName() : undefined,
+        chromePath: config.getChromePath ? config.getChromePath() : undefined,
+      };
+      const result = await agent.conductor.handle(agent.conversationKey, routed, ctx);
       return reply.send({ reply: formatResult(result), kind: result.kind });
     } catch (e) {
       console.error('[cc-router] /im/handle error:', e && e.message);

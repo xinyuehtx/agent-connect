@@ -17,6 +17,7 @@ const { llmErrorMessage } = require('../src/lib/messenger/agent');
 const { historyToEvents, mask } = require('../src/server/routes');
 const { toSummary, toEvent } = require('../src/lib/control-plane');
 const { gateFor } = require('../src/lib/app-config');
+const { escapeHtml, sendViaCcConnect } = require('../src/lib/im/deliver');
 
 function tmpFile(name) {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-')), name);
@@ -234,6 +235,15 @@ test('llmErrorMessage surfaces real reason from responseBody', () => {
   assert.strictEqual(llmErrorMessage({ message: 'boom' }), 'boom');
   // handles nested error.message shape
   assert.match(llmErrorMessage({ statusCode: 401, responseBody: JSON.stringify({ error: { message: 'bad key' } }) }), /bad key/);
+});
+
+test('deliver.escapeHtml escapes markup', () => {
+  assert.strictEqual(escapeHtml('<a>&"b"'), '&lt;a&gt;&amp;"b"');
+});
+
+test('deliver.sendViaCcConnect refuses empty payload', () => {
+  const r = sendViaCcConnect({});
+  assert.strictEqual(r.ok, false);
 });
 
 test('historyToEvents maps user/assistant + tool calls', () => {

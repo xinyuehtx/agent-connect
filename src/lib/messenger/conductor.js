@@ -81,7 +81,7 @@ class AgentConductor {
    * @param {string} text
    * @returns {Promise<object>} ConductorResult
    */
-  async handle(conversationKey, text) {
+  async handle(conversationKey, text, ctx) {
     // 实时求值：Web 配置页改动确认词/超时后立即生效，无需重启
     const confirmWords = resolve(this.confirmWords);
     const cancelWords = resolve(this.cancelWords);
@@ -117,7 +117,7 @@ class AgentConductor {
     }
 
     const stage = (kind, params) => this._stage(conversationKey, kind, params);
-    const reply = await this.messenger.run(conversationKey, text, stage);
+    const reply = await this.messenger.run(conversationKey, text, stage, ctx);
     const staged = this.pending.get(conversationKey);
     if (staged.length > 0) {
       return { kind: 'staged', reply, actions: staged };

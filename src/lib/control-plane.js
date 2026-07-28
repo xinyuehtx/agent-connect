@@ -7,7 +7,7 @@ const { EventEmitter } = require('events');
 const registry = require('./registry');
 const tmux = require('./tmux');
 const proc = require('./proc');
-const { readEvents, textFromContent } = require('./transcript');
+const { readEvents, textFromContent, summarize } = require('./transcript');
 const { getAdapter, getAdapters } = require('./agents');
 const { NotFoundError, NotControllableError, ConflictError } = require('./errors');
 
@@ -105,12 +105,43 @@ class ControlPlane extends EventEmitter {
   /* ---------------- 读平面 ---------------- */
 
   /**
-   * 列出会话（含通道分类）。
-   * @param {object} [opts] { all }
+   * 列出会话（含通道分类）。activity=true 时附带最近一条用户输入/回复/工具（读 transcript）。
+   * @param {object} [opts] { all, activity }
    * @returns {Promise<object[]>}
    */
   async listSessions(opts = {}) {
-    return registry.list({ all: !!opts.all }).map(toSummary);
+    const list = registry.list({ all: !!opts.all }).map(toSummary);
+    if (!opts.activity) {
+      return list;
+    }
+    return list.map((s) => {
+      const adapter = getAdapter(s.tool);
+      const file = adapter && s.cwd ? adapter.transcriptPath(s.cwd, s.sessionId) : null;
+      let act = { lastUser: '', lastAssistant: '', lastTool: null };
+      if (file) {
+        try { act = summarize(file); } catch (e) { /* ignore */ }
+      }
+      return {
+        ...s,
+        lastUser: act.lastUser || '',
+        lastAssistant: act.lastAssistant || '',
+        lastTool: act.lastTool || null,
+      };
+    });
+  }
+
+  /**
+   * 抓取某 tmux 会话可见 pane 文本（用于"截图"/快照）。非 tmux 通道返回 null。
+   * @param {string} id
+   * @param {number} [lines=200]
+   * @returns {{text:string, session:object}|null}
+   */
+  capturePane(id, lines = 200) {
+    const s = registry.find(id);
+    if (!s || s.channel !== 'tmux' || !s.target) {
+      return null;
+    }
+    return { text: tmux.capturePane(s.target, lines), session: toSummary(s) };
   }
 
   /**

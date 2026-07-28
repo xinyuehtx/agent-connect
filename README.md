@@ -103,6 +103,10 @@ When a sender isn't in `allowed_sender_ids`, the bot **replies with an explicit 
 
 For a typewriter-style streaming reply, create an **AI card template** on the DingTalk Open Platform and set its id — `card_template_id` (+ optional `card_template_key`, `card_throttle_ms`) under the DingTalk platform options, or via the web **Settings → IM connector → Streaming AI card**. If unset, replies fall back to normal messages (fully functional, just not streamed).
 
+## 📸 Rich replies & screenshots
+
+Replies are sent as **Markdown** (tables, bold, code blocks, emoji status), so the session list shows project / agent / status / latest input at a glance. The messenger can also send **images**: `snapshot_session` renders a session's terminal pane to a PNG (via headless Chrome, auto-detected; set `messenger.chrome_path` to override) and posts it to the chat; `send_image` delivers any local image file. Both go out via `cc-connect send --image`. If no renderer is found, snapshots fall back to a Markdown code block.
+
 ---
 
 ## 📖 CLI reference
@@ -263,6 +267,10 @@ cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、D
 ## 🖌️ 流式 AI 卡片（钉钉，可选）
 
 想要打字机式流式回复：在钉钉开放平台创建 **AI 卡片模板**，把它的 id 填到钉钉平台选项的 `card_template_id`（另可选 `card_template_key`、`card_throttle_ms`），或在 Web **设置 → IM 连接器 → 流式 AI 卡片** 里填。不填则回退为普通消息（功能不受影响，只是非流式）。
+
+## 📸 富文本回复与截图
+
+回复以 **Markdown** 发送（表格、加粗、代码块、emoji 状态），会话列表因此能一眼看到 项目 / Agent / 状态 / 最近输入。信使还能发**图片**：`snapshot_session` 把某会话的终端画面渲染成 PNG（用自动探测的无头 Chrome；可用 `messenger.chrome_path` 指定）并发到聊天里；`send_image` 发送本机任意图片文件。二者都经 `cc-connect send --image` 投递。若本机没有渲染器，截图会退回为 Markdown 代码块。
 
 ---
 

@@ -79,7 +79,7 @@ async function serve(opts = {}) {
   });
 
   // 配置 API（Web 配置页用）
-  const MSG_FIELDS = ['provider', 'model', 'api_key', 'base_url', 'max_steps', 'conversation_key', 'auth_style'];
+  const MSG_FIELDS = ['provider', 'model', 'api_key', 'base_url', 'max_steps', 'conversation_key', 'auth_style', 'chrome_path'];
   const GATE_FIELDS = ['enabled', 'command_prefix', 'allowed_sender_ids', 'confirm_words', 'cancel_words', 'confirm_ttl_ms'];
   // cc-connect 钉钉平台的凭证/流式卡片选项（写入 projects[].platforms[dingtalk].options）
   const DT_OPT_FIELDS = ['card_template_id', 'card_template_key', 'card_throttle_ms'];
@@ -129,6 +129,13 @@ async function serve(opts = {}) {
     },
     // 平台无关：按 CC_SESSION_KEY 解析出的平台名取闸门（未配置则用默认）
     getGate: (platform) => gateFor(loadConfig(), platform || 'dingtalk'),
+    // cc-connect 项目名（用于 cc-connect send -p）与图片渲染 chrome 路径
+    getProjectName: () => {
+      const raw = loadConfig();
+      const p = Array.isArray(raw.projects) && raw.projects[0] ? raw.projects[0].name : null;
+      return p || 'messenger';
+    },
+    getChromePath: () => (loadAppConfig().messenger || {}).chrome_path || '',
   };
 
   // /im/handle 的分类闸门（注入 pending 计数以支持裸确认/取消）
