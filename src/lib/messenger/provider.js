@@ -19,11 +19,19 @@ async function buildModel(cfg) {
     return provider === 'openai-compatible' ? openai.chat(cfg.model) : openai(cfg.model);
   }
 
-  // 预留：待引入对应 @ai-sdk 包后启用
-  // if (provider === 'anthropic') { ... }
+  if (provider === 'anthropic') {
+    const { createAnthropic } = await import('@ai-sdk/anthropic');
+    const anthropic = createAnthropic({
+      apiKey: cfg.api_key || process.env.ANTHROPIC_API_KEY || 'sk-none',
+      baseURL: cfg.base_url || undefined, // 留空则用官方 api.anthropic.com；内网网关填 .../api/anthropic
+    });
+    return anthropic(cfg.model);
+  }
+
+  // 预留：google 等
   // if (provider === 'google') { ... }
 
-  throw new Error(`暂不支持的 messenger.provider: ${provider}（当前支持 openai-compatible / openai）`);
+  throw new Error(`暂不支持的 messenger.provider: ${provider}（当前支持 openai-compatible / openai / anthropic）`);
 }
 
 /**
@@ -38,7 +46,8 @@ function validateProviderConfig(cfg) {
   if (cfg.provider === 'openai-compatible' && !cfg.base_url) {
     return { ok: false, reason: 'openai-compatible 需要 base_url' };
   }
-  if (!cfg.api_key && !process.env.OPENAI_API_KEY) {
+  const hasKey = cfg.api_key || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  if (!hasKey) {
     return { ok: false, reason: '缺少 api_key' };
   }
   return { ok: true };

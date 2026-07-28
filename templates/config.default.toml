@@ -8,12 +8,12 @@ host = "127.0.0.1"
 port = 8787
 token = ""              # 留空则首次 serve 时自动生成并打印
 
-# ── 信使 Agent（Vercel AI SDK / OpenAI-compatible）──
+# ── 信使 Agent（Vercel AI SDK）──
 [messenger]
-provider = "openai-compatible"   # 首批支持 openai-compatible
+provider = "openai-compatible"   # openai-compatible | openai | anthropic
 model = "gpt-4o-mini"
 api_key = ""
-base_url = ""                    # 自建网关/兼容端点，如 https://your-gateway/v1
+base_url = ""                    # 兼容端点如 https://gw/v1；anthropic 内网网关如 https://gw/api/anthropic
 max_steps = 8
 conversation_key = "messenger"   # Web 与 IM 共享的信使会话 key
 

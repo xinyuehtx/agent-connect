@@ -17,7 +17,7 @@ function start() {
 
   console.log(`启动 cc-connect (配置: ${CONFIG_FILE})...`);
 
-  const child = spawn('cc-connect', ['-c', CONFIG_FILE], {
+  const child = spawn('cc-connect', ['--config', CONFIG_FILE], {
     stdio: 'inherit',
   });
 

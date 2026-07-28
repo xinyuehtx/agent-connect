@@ -201,6 +201,9 @@ test('validateProviderConfig flags missing base_url/model/key', () => {
   assert.strictEqual(validateProviderConfig({ provider: 'openai-compatible', model: 'm', base_url: '', api_key: 'k' }).ok, false);
   assert.strictEqual(validateProviderConfig({ provider: 'openai-compatible', model: '', base_url: 'u', api_key: 'k' }).ok, false);
   assert.strictEqual(validateProviderConfig({ provider: 'openai-compatible', model: 'm', base_url: 'u', api_key: 'k' }).ok, true);
+  // anthropic: base_url optional (defaults to api.anthropic.com), needs model + key
+  assert.strictEqual(validateProviderConfig({ provider: 'anthropic', model: 'claude-x', api_key: 'k' }).ok, true);
+  assert.strictEqual(validateProviderConfig({ provider: 'anthropic', model: '', api_key: 'k' }).ok, false);
 });
 
 /* ---------------- routes helpers ---------------- */

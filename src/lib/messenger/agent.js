@@ -103,9 +103,12 @@ function buildTools({ plane, stage, tool }) {
  * 信使 Agent：用 AI SDK 跑一轮多步工具调用，产出回复（并可能暂存变更动作）。
  */
 class Messenger {
-  constructor({ plane, cfg, historyStore }) {
+  constructor({
+    plane, cfg, getCfg, historyStore,
+  }) {
     this.plane = plane;
-    this.cfg = cfg;
+    // getCfg 优先：每轮实时读配置（CLI/文件改动即时生效）；否则退回静态 cfg
+    this.getCfg = getCfg || (() => cfg);
     this.historyStore = historyStore;
   }
 
@@ -117,8 +120,9 @@ class Messenger {
    * @returns {Promise<string>} 面向用户的回复文本
    */
   async run(conversationKey, userText, stage) {
+    const cfg = this.getCfg();
     const { generateText, stepCountIs, tool } = await import('ai');
-    const model = await buildModel(this.cfg);
+    const model = await buildModel(cfg);
     const tools = buildTools({ plane: this.plane, stage, tool });
 
     const history = this.historyStore.get(conversationKey);
@@ -129,7 +133,7 @@ class Messenger {
       system: SYSTEM_PROMPT,
       messages,
       tools,
-      stopWhen: stepCountIs(this.cfg.max_steps || 8),
+      stopWhen: stepCountIs(cfg.max_steps || 8),
     });
 
     const updated = [...messages, ...result.response.messages];

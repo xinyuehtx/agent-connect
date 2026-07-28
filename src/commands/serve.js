@@ -64,7 +64,8 @@ async function serve(opts = {}) {
 
   const pending = new FilePendingStore(path.join(CONFIG_DIR, 'pending.json'));
   const historyStore = new FileHistoryStore(path.join(CONFIG_DIR, 'history.json'));
-  const messenger = new Messenger({ plane, cfg: messengerCfg, historyStore });
+  // 每轮实时读 messenger 配置：CLI/文件/Web 改动都即时生效，无需重启
+  const messenger = new Messenger({ plane, getCfg: () => loadAppConfig().messenger, historyStore });
   const conversationKey = messengerCfg.conversation_key || 'messenger';
   const conductor = new AgentConductor({
     messenger,
