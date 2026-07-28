@@ -1,13 +1,17 @@
 {
   "name": "@tengxiaohtx/cc-connect-router",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI tool for managing cc-connect-router configuration",
   "type": "commonjs",
   "bin": {
     "cc-router": "./bin/cli.js"
   },
   "main": "./src/index.js",
-  "files": ["bin/", "src/", "templates/"],
+  "files": [
+    "bin/",
+    "src/",
+    "templates/"
+  ],
   "scripts": {
     "test": "node --test",
     "lint": "echo 'no lint configured'",
@@ -15,7 +19,13 @@
     "release:minor": "npm version minor",
     "release:major": "npm version major"
   },
-  "keywords": ["cc-connect", "opencode", "qoder", "dingtalk", "cli"],
+  "keywords": [
+    "cc-connect",
+    "opencode",
+    "qoder",
+    "dingtalk",
+    "cli"
+  ],
   "author": "tengxiaohtx",
   "license": "MIT",
   "repository": {
