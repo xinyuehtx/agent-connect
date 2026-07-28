@@ -1,51 +1,179 @@
 # 🤖 cc-connect-router
 
-> 从手机（钉钉）监控并控制本机上正在运行的**多个** coding agent 会话（Claude Code / qodercli）：**读写分离、一对多、无解释型路由夹层**。
+**English** | [简体中文](#-cc-connect-router-简体中文)
 
-在钉钉里发一句话，就能查看本机所有 agent 任务的状态、只读拉取结果、并把后续指令注入到指定的那个任务。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 做钉钉 ↔ 本地的消息传输，本机侧的发现与控制全部由 `cc-router agent` 命令完成。
+> Monitor and control **multiple** coding-agent sessions (Claude Code / qodercli) running on your machine — straight from DingTalk on your phone. **Read/write split · one-to-many · messenger agent for intent dispatch · human-confirmed writes.**
+
+📖 **Intro site:** https://xinyuehtx.github.io/connect/
+
+Send one message in DingTalk to see the status of every agent session on your machine, pull results read-only, and inject follow-up instructions into a specific task. A lightweight **messenger agent** (built on the Vercel AI SDK, any OpenAI-compatible model) reads your intent, decides read vs. write, and targets the right session — every mutation of a worker session waits for **your confirmation**. Messages ride [cc-connect](https://github.com/chenhg5/cc-connect) for DingTalk ⇄ local transport; a companion `cc-router serve` provides a web console.
+
+---
+
+## 🏗️ Architecture
+
+Three layers, one job each:
+
+- **Messenger Agent (dispatch, not a re-router)** — built on the AI SDK, decoupled from Claude Code. It only decides *read vs. write / which session / which verb* and calls the control plane via tools; **the task itself still runs in the worker agent.** The messenger keeps its own conversation context (shared by web + DingTalk) and **never enters a worker's context** — that's what makes read/write separation work for natural-language input.
+- **Read / write planes** — reads (list/read) only touch Claude Code's on-disk session registry and transcripts: zero side effects, never the worker process. Writes (send/takeover/run) go through tmux, gated by a **propose → confirm → execute** state machine.
+- **Transport** — still cc-connect. Because cc-connect only accepts custom programs through its `acp` agent type, the messenger plugs in as a thin **ACP bridge** (`cc-router acp`) that forwards to the `cc-router serve` daemon.
+
+```
+DingTalk ─Stream─► cc-connect ─exec─► cc-router acp (bridge) ─HTTP─► cc-router serve (daemon)
+                                                                        │
+   ┌─────────────────────────────────────────────────────────────────┐ │
+   │  Web console + SSE + config       gate (allowlist / prefix / confirm) │◄┘
+   │        │  shared conductor / pending / messenger context           │
+   │  AgentConductor  ( propose → confirm → execute )                   │
+   │  Messenger Agent ( AI SDK, OpenAI-compatible )                     │
+   │        │  read tools  /  propose tools                             │
+   │  ControlPlane: listSessions·getMessages · sendMessage·takeover·run │
+   └──┬──────────────────┬──────────────────┬─────────────────────────┘
+   registry.js       transcript.js         tmux.js
+```
+
+> **Evolution:** earlier versions argued for “no routing agent” (forward chat straight to the worker, let it interpret). But controlling other sessions from chat that way **pollutes the worker's context** and lacks a safety gate. The current design uses a separate messenger for **addressing/dispatch** (it never re-interprets or re-executes the task) plus plane separation plus human confirmation — keeping the “just say it” UX while staying safe.
+
+---
+
+## 📦 Install
+
+```bash
+npm install -g @tengxiaohtx/connect
+```
+
+## 🚀 Quick start
+
+```bash
+# 1. Create default config at ~/.cc-connect-router/config.toml
+cc-router init
+
+# 2. Start the web console daemon (prints an access token on first run)
+cc-router serve
+#   Open http://127.0.0.1:8787 → log in with the printed token
+#   Settings → LLM Provider: base_url / api_key / model (any OpenAI-compatible endpoint)
+#   Settings → IM connector: DingTalk client_id / client_secret + gate (prefix / allowlist)
+
+# 3. In another terminal, start cc-connect (DingTalk ⇄ local)
+cc-router start
+```
+
+Everything is configurable via CLI too (equivalent to the settings page):
+
+```bash
+cc-router config set messenger.base_url "https://your-gateway/v1"
+cc-router config set messenger.api_key  "sk-..."
+cc-router config set messenger.model    "gpt-4o-mini"
+cc-router config set projects.0.platforms.0.options.client_id     "your-dingtalk-client-id"
+cc-router config set projects.0.platforms.0.options.client_secret "your-dingtalk-client-secret"
+```
+
+DingTalk credentials come from an **internal app / bot** on the [DingTalk Open Platform](https://open.dingtalk.com) with **Stream mode** enabled. The default config already wires the messenger as cc-connect's `acp` agent (`cmd = "cc-router"`, `args = ["acp"]`) — no manual edit needed.
+
+> In DingTalk, messages need the `/ai` prefix to reach the messenger (e.g. `/ai list sessions`). Reply `确认`/`取消` (yes/no) to a pending action. The prefix is configurable, or leave it empty to process every message.
+
+---
+
+## 🧠 Messenger agent (dispatch + safety gate)
+
+The messenger is **not** a re-router — it never re-interprets or executes your task. It does three things: decide **read vs. write**, locate **which session**, pick **which verb**, then call control-plane tools. The task still runs in the worker agent.
+
+- **Read tools** (`list_sessions` / `read_session` / `get_status`) — always available, read on-disk files only, zero pollution.
+- **Propose tools** (`propose_send` / `propose_takeover` / `propose_run`) — **stage only**, never execute. The messenger returns a pending list; you reply “确认” to run it through tmux, or “取消”/timeout (5 min default) to drop it.
+
+The LLM uses the Vercel AI SDK. First-class support is **OpenAI-compatible** (`base_url` + `api_key` + `model`), covering self-hosted gateways, proxies, and most compatible endpoints — fully decoupled from Claude Code. Switch it in the web settings page or the config file.
+
+---
+
+## 📖 CLI reference
+
+| Command | Description |
+|---------|-------------|
+| `cc-router init [--force]` | Create config dir + default config (`--force` overwrites) |
+| `cc-router serve [-H host] [-p port]` | Start web console + messenger daemon (planes + gate; prints token on first run) |
+| `cc-router acp` | ACP bridge for cc-connect (spawned by cc-connect; don't run by hand) |
+| `cc-router start` | Start cc-connect (DingTalk ⇄ local transport) |
+| `cc-router config get/set/remove/list` | Read/write config (dot-path keys, sensitive fields masked) |
+| `cc-router project add/remove/list` | Manage cc-connect projects |
+| `cc-router agent list [-a] [--json]` | List running agent sessions |
+| `cc-router agent read <id> [--full]` | Read status + latest reply (read-only, no pollution) |
+| `cc-router agent send <id> "<text>"` | Inject an instruction into a tmux session |
+| `cc-router agent takeover <id> [--force]` | Adopt a non-tmux session (kill + resume in tmux) |
+| `cc-router agent run ["<prompt>"] [-w dir]` | Spawn a new remote-controllable session in tmux |
+
+---
+
+## 📋 Prerequisites
+
+| Dependency | Purpose | Link |
+|------------|---------|------|
+| **Node.js ≥ 18** | Runs the `cc-router` CLI and `serve` daemon | https://nodejs.org |
+| **cc-connect** | Gateway; forwards DingTalk to the messenger via `acp` | https://github.com/chenhg5/cc-connect |
+| **OpenAI-compatible LLM** | The messenger's model (`base_url` + `api_key` + `model`) | self-hosted gateway / proxy |
+| **tmux** | Needed for the write plane; reads don't need it | `brew install tmux` |
+| **Claude Code / qodercli** | The worker agents being controlled (at least one) | — |
+| **DingTalk developer account** | Create a bot, get `client_id`/`client_secret`, enable Stream mode | https://open.dingtalk.com |
+
+## 🛠️ Development
+
+```bash
+npm test            # node --test
+node bin/cli.js --help
+```
+
+## 📂 Layout
+
+```
+src/lib/control-plane.js   read/write planes (reuses registry/transcript/tmux)
+src/lib/messenger/         agent (AI SDK) / conductor / provider / pending / history
+src/lib/im/                gate (routing) / session-key (CC_SESSION_KEY parsing)
+src/server/                Fastify: http / routes / sse / auth  (web + /im/handle)
+web/                       console front-end
+docs/                      GitHub Pages intro site
+```
+
+## License
+
+MIT
+
+---
+---
+
+# 🤖 cc-connect-router (简体中文)
+
+[English](#-cc-connect-router) | **简体中文**
+
+> 从手机（钉钉）监控并控制本机上运行的**多个** coding agent 会话（Claude Code / qodercli）：**读写分离 · 一对多 · 信使 Agent 做意图分派 · 写操作人工确认。**
+
+📖 **使用介绍网站：** https://xinyuehtx.github.io/connect/
+
+在钉钉里发一句话，就能查看本机所有 agent 任务的状态、只读拉取结果、并把后续指令注入到指定的那个任务。一个轻量的**信使 Agent**（Vercel AI SDK，可配置任意 OpenAI 兼容模型）理解你的意图、决定读还是写、定位到哪个会话；任何变更 worker 会话的操作都要你**确认**后才执行。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 做钉钉 ↔ 本地的消息传输，配套 `cc-router serve` 提供 Web 控制台。
 
 ---
 
 ## 🏗️ 架构
 
-**无解释型路由 Agent**：普通消息由 cc-connect 直接转发给绑定的目标 agent 会话——目标 agent（Claude Code / qodercli）本身就是 LLM，自己理解自然语言，不需要中间再夹一个"路由 agent"去翻译意图。跨会话的发现与控制由 `cc-router agent` 这一层**确定性命令**完成。
+三层，各司其职：
+
+- **信使 Agent（寻址分派，非重路由）**：用 AI SDK 实现、与 Claude Code 解耦。它只判断「读还是写 / 哪个会话 / 哪个动词」，用工具调用控制面；**任务本身仍由 worker agent 执行**。信使自己一个独立会话上下文（Web 与钉钉共享），**永不进入 worker 会话的上下文**——这正是读写分离在自然语言输入下的守门人。
+- **读写双平面**：读（list/read）只读 Claude Code 落盘的 sessions 注册表与 transcript，零副作用、不碰 worker 进程；写（send/takeover/run）经 tmux，且必须经**「提议 → 人工确认 → 执行」**安全闸。
+- **通信**：继续用 cc-connect。因 cc-connect 只能通过 `acp` agent 类型接入自定义程序，信使以一个 **ACP 薄桥**（`cc-router acp`）作为它的 agent，把消息转发给 `cc-router serve` 守护。
 
 ```
-钉钉 ↔ cc-connect ↔ 目标 agent 会话（Claude Code / qodercli，直连，自己理解 NL）
-                         ▲
-                         │ 发现 / 只读 / 注入 / 接管 / 新建（确定性命令，无 LLM 夹层）
-                    cc-router agent  ──►  tmux 托管的会话（可远控，支撑一对多）
+钉钉 ─Stream─► cc-connect ─exec─► cc-router acp（薄桥）─HTTP─► cc-router serve（守护）
+                                                                  │
+   ┌──────────────────────────────────────────────────────────┐ │
+   │  Web 控制台 + SSE + 配置页        闸门(白名单/前缀/确认词)   │◄┘
+   │        │  共享 conductor / pending / 信使会话上下文         │
+   │  AgentConductor（提议→确认→执行 安全闸）                    │
+   │  Messenger Agent（AI SDK，OpenAI-compatible）              │
+   │        │ 只读工具 / 提议工具                                │
+   │  ControlPlane: listSessions·getMessages·sendMessage·takeover·run │
+   └──┬───────────────┬──────────────┬────────────────────────┘
+   registry.js     transcript.js    tmux.js
 ```
 
-```
-              钉钉用户消息
-                   │  DingTalk Stream
-                   ▼
-        ┌──────────────────────┐
-        │      cc-connect       │   钉钉 ↔ 本地 消息传输
-        └──────────────────────┘
-                   │  普通消息直连转发
-                   ▼
-        ┌──────────────────────┐        发现/只读/注入/接管
-        │   目标 agent 会话     │ ◄─────────────────────────┐
-        │ Claude Code/qodercli  │   （自己理解自然语言）      │
-        └──────────────────────┘                           │
-                   │ 运行于                        ┌──────────────────┐
-                   ▼                               │  cc-router agent  │
-             tmux 托管会话  ◄─────── 管理/一对多 ───│  控制面（CLI）    │
-                                                   └──────────────────┘
-```
-
-用 Mermaid 表示：
-
-```mermaid
-graph LR
-    P[钉钉 / 手机] <-->|DingTalk Stream| CC[cc-connect 消息传输]
-    CC <-->|普通消息直连| A[目标 agent 会话<br/>Claude Code / qodercli<br/>自己理解 NL]
-    R[cc-router agent<br/>控制面 list/read/send/takeover/run] -->|发现·只读·注入·接管| A
-    A -.->|运行于| T[tmux 托管会话]
-    R -.->|管理·一对多| T
-```
+> **演进说明**：早期版本主张「无路由 Agent」（普通消息直连 worker，由其自行理解）。但那样从聊天做跨会话控制会**污染 worker 上下文**，且缺少安全闸。现改为独立信使做**寻址分派**（不重新理解/执行任务）+ 读写分离 + 人工确认，兼顾「发一句话就行」的体验与安全。
 
 ---
 
@@ -55,39 +183,46 @@ graph LR
 npm install -g @tengxiaohtx/connect
 ```
 
-安装后即可使用 `cc-router` 命令行工具。
-
----
-
 ## 🚀 快速开始
 
 ```bash
-# 1. 初始化配置（在 ~/.cc-connect-router/config.toml 生成默认配置）
+# 1. 初始化配置（生成 ~/.cc-connect-router/config.toml）
 cc-router init
 
-# 2. 配置钉钉凭证
-cc-router config set projects.0.platforms.0.options.client_id "your-id"
-cc-router config set projects.0.platforms.0.options.client_secret "your-secret"
+# 2. 启动 Web 控制台守护（首次会打印访问令牌）
+cc-router serve
+#   浏览器打开 http://127.0.0.1:8787 → 用打印出的令牌登录
+#   设置 → LLM Provider：填 base_url / api_key / model（任意 OpenAI 兼容端点）
+#   设置 → IM 连接器：填钉钉 client_id / client_secret + 闸门（前缀 / 白名单）
 
-# 3. 设置项目工作目录
-cc-router config set projects.0.agent.options.work_dir "/path/to/project"
-
-# 4. 启动服务
+# 3. 另开一个终端，拉起 cc-connect（钉钉 ↔ 本地）
 cc-router start
 ```
 
-其中钉钉凭证 `client_id` / `client_secret` 需在[钉钉开放平台](https://open.dingtalk.com)创建**企业内部应用**（或机器人应用），并在「机器人」配置中启用 **Stream 模式**后获取。
+也可以全用 CLI 配置（等价于 Web 配置页）：
+
+```bash
+cc-router config set messenger.base_url "https://your-gateway/v1"
+cc-router config set messenger.api_key  "sk-..."
+cc-router config set messenger.model    "gpt-4o-mini"
+cc-router config set projects.0.platforms.0.options.client_id     "your-dingtalk-client-id"
+cc-router config set projects.0.platforms.0.options.client_secret "your-dingtalk-client-secret"
+```
+
+钉钉凭证 `client_id` / `client_secret` 需在[钉钉开放平台](https://open.dingtalk.com)创建**企业内部应用**（或机器人应用），并启用 **Stream 模式**。默认配置已把信使接成 cc-connect 的 `acp` agent（`cmd = "cc-router"`, `args = ["acp"]`），无需手改。
+
+> 钉钉里默认要带前缀 `/ai` 才会路由给信使（如 `/ai 列出会话`）；待确认时直接回「确认 / 取消」。前缀可改或留空（留空 = 处理所有消息）。
 
 ---
 
-## 🧩 无需路由 Agent
+## 🧠 信使 Agent（寻址分派 + 安全闸）
 
-本项目**不需要**一个额外的"路由 Agent"来解释钉钉消息：
+信使**不是**重路由——它不重新理解或执行你的任务，只做三件事：判断**读还是写**、定位**哪个会话**、选择**哪个动词**，然后调用控制面工具。任务本身仍交给 worker agent。
 
-- **普通消息**：cc-connect 直接转发给绑定的目标 agent 会话，由它（Claude Code / qodercli，本身即 LLM）自行理解并执行。
-- **跨会话控制**：用 `cc-router agent list/read/send/takeover/run` 这组**确定性命令**完成发现、只读、注入、接管、新建——没有意图识别的 LLM 夹层，也就没有二次推理的延迟、成本与出错面。
+- **读工具**（`list_sessions` / `read_session` / `get_status`）：随时可用，只读落盘文件，零污染。
+- **提议工具**（`propose_send` / `propose_takeover` / `propose_run`）：**只暂存**，不执行。信使会回一张待确认清单，你回「确认」才真正经 tmux 执行，「取消」或超时（默认 5 分钟）则作废。
 
-> 早期的 `qoder-router` skill（依赖 OpenCode 路由层、单项目直调 Qoder CLI 的旧流程）仍保留在 `skill/qoder-router/` 作为历史参考，已被上述直连 + 控制面模型取代。
+LLM 用 Vercel AI SDK，首批支持 **OpenAI-compatible**（`base_url` + `api_key` + `model`），覆盖自建网关/代理/多数兼容端点，与 Claude Code 完全解耦。可在 Web 配置页或 config 文件切换。
 
 ---
 
@@ -95,125 +230,17 @@ cc-router start
 
 | 命令 | 说明 |
 |------|------|
-| `cc-router init [--force]` | 初始化配置目录与默认配置文件（`--force` 覆盖已存在文件） |
-| `cc-router config get <key>` | 读取配置项（支持点号路径） |
-| `cc-router config set <key> <value>` | 修改配置项（自动类型推断） |
-| `cc-router config remove <key> [--yes]` | 删除配置项（`--yes` 跳过确认） |
-| `cc-router config list` | 显示完整配置（敏感字段遮掩） |
-| `cc-router project add <name> <dir> [--agent type]` | 添加新项目 |
-| `cc-router project remove <name> [--yes]` | 删除项目 |
-| `cc-router project list` | 列出所有项目 |
-| `cc-router start` | 使用当前配置启动 cc-connect |
-| `cc-router agent list [-a] [--json]` | 列出本机运行中的 Agent 会话（一对多看板数据源） |
-| `cc-router agent read <id> [--json] [--full]` | 只读查看会话状态与最新回复（不污染上下文） |
-| `cc-router agent send <id> "<text>"` | 向 tmux 托管的会话注入指令 |
-| `cc-router agent takeover <id> [--force]` | 接管非 tmux 会话（kill 原进程 + resume 进 tmux） |
-| `cc-router agent run ["<prompt>"] [-w dir]` | 在 tmux 中启动一个可远控的新会话 |
-
----
-
-## 🎛️ Agent 会话控制（读写双平面）
-
-用一部手机监控并控制本机上**多个**正在运行的 Agent 会话（当前支持 Claude Code，qodercli 为其衍生品、后续接入）。核心是**读写分离**，避免手机上大量查询污染真实工作上下文：
-
-- **读平面（带外、零污染）**：`agent list` / `agent read` 直接读 Claude Code 落盘的运行态注册表（`~/.claude/sessions/<pid>.json`）与会话 transcript（`~/.claude/projects/<cwd>/<id>.jsonl`），**完全不碰 agent 进程**，手机上狂刷也不入任何上下文。
-- **写平面（带内、刻意）**：`agent send` 才会真正向会话注入指令。
-
-会话按**控制通道**分类：
-
-| 通道 | 含义 | 可注入？ |
-|------|------|----------|
-| `tmux` | 我们托管的（`agent run`/`takeover`）或外部 tmux 会话 | ✅ `agent send` 直接注入 |
-| `tty` | 裸终端交互会话 | 需先 `agent takeover` 接管进 tmux |
-| `ide` | IDE（VS Code 等）占用 / headless | 只读，勿动 |
-| `dead` | 进程已退出，仅剩磁盘记录 | `takeover` 直接 resume |
-
-典型流程：
-
-```bash
-cc-router agent list                         # 看有哪些会话、谁在忙谁空闲
-cc-router agent read a1b2c3d4                 # 任务跑完了？看看结果（只读）
-cc-router agent takeover a1b2c3d4             # 若是裸终端会话，先接管进 tmux
-cc-router agent send a1b2c3d4 "继续：改用方案 B"  # 继续派活
-cc-router agent run -w /path/to/proj "跑单元测试"  # 或全新起一个可远控会话
-```
-
-> 依赖 `tmux`（写平面）：`brew install tmux`。读平面（list/read）无需 tmux。
-
-
----
-
-## 💬 使用示例
-
-在钉钉中直接用自然语言对机器人说：
-
-| 你发送的消息 | 路由到的脚本 | 作用 |
-|--------------|--------------|------|
-| 查看 connect 项目的任务 | `qoder-tasks.sh` | 列出项目后台任务 |
-| 给 cli 项目指派任务：优化命令行参数解析 | `qoder-assign.sh` | 创建新任务 |
-| 看看任务 abc123 的执行进度 | `qoder-status.sh` | 查询会话状态 |
-| 在 opencode 项目中实现日志模块 | `qoder-exec.sh` | 立即执行指令 |
-| 任意开发问题（如"帮我看下这个报错"） | `qoder-exec.sh`（默认路由） | 交给 Qoder 处理 |
-
-> 意图识别与参数提取由 `skill/qoder-router/SKILL.md` 定义的路由规则完成。
-
----
-
-## 📂 项目结构
-
-```
-connect/
-├── bin/
-│   └── cli.js                   # cc-router CLI 入口
-├── src/
-│   ├── commands/                # 各子命令实现（init/get/set/start 等）
-│   ├── lib/                     # 配置存取与路径工具
-│   └── index.js
-├── templates/
-│   └── config.default.toml      # 默认配置模板（cc-router init 使用）
-├── skill/
-│   └── qoder-router/            # skills.sh 标准格式 skill
-│       ├── SKILL.md             # skill 定义：意图识别 + 路由规则
-│       ├── scripts/             # skill 附带的 shell 脚本
-│       └── references/          # 参考文档（如 setup-guide.md）
-├── scripts/                     # 本地脚本（开发者模式使用）
-│   ├── common.sh                # 公共函数库
-│   ├── qoder-tasks.sh           # 查询项目任务列表
-│   ├── qoder-assign.sh          # 指派新任务
-│   ├── qoder-status.sh          # 查询会话/任务状态
-│   └── qoder-exec.sh            # 在项目中执行指令
-├── config.toml                  # 本地开发参考配置
-├── Makefile                     # setup / run / check 等命令
-├── package.json
-└── README.md
-```
-
----
-
-## ➕ 添加新项目
-
-```bash
-cc-router project add my-backend /path/to/backend --agent qoder
-```
-
-添加后可用 `cc-router project list` 查看，无需手动编辑配置文件。
-
----
-
-## 🛠️ 开发者模式（可选）
-
-如果你直接在本仓库开发调试，也可以使用手动配置方式：
-
-1. 直接编辑本地 `config.toml`，填入钉钉凭证与 `work_dir`。
-2. 运行 `make run` 启动服务（会优先使用 `~/.cc-connect-router/config.toml`，若不存在则回退到本地 `config.toml`）。
-
-其他常用命令：
-
-```bash
-make install      # 设置 scripts/*.sh 可执行权限
-make check        # 检查环境依赖与配置
-make test-local   # 本地测试脚本可用性
-```
+| `cc-router init [--force]` | 初始化配置目录与默认配置（`--force` 覆盖） |
+| `cc-router serve [-H host] [-p port]` | 启动 Web 控制台 + 信使守护（读写平面 + 安全闸；首启打印令牌） |
+| `cc-router acp` | ACP 薄桥，供 cc-connect 拉起（勿手动运行） |
+| `cc-router start` | 启动 cc-connect（钉钉 ↔ 本地 消息传输） |
+| `cc-router config get/set/remove/list` | 读写配置（点号路径，敏感字段遮掩） |
+| `cc-router project add/remove/list` | 管理 cc-connect 项目 |
+| `cc-router agent list [-a] [--json]` | 列出运行中的 agent 会话 |
+| `cc-router agent read <id> [--full]` | 只读查看状态与最新回复（不污染上下文） |
+| `cc-router agent send <id> "<text>"` | 向 tmux 会话注入指令 |
+| `cc-router agent takeover <id> [--force]` | 接管非 tmux 会话（kill + resume 进 tmux） |
+| `cc-router agent run ["<prompt>"] [-w dir]` | 在 tmux 中新建可远控会话 |
 
 ---
 
@@ -221,29 +248,31 @@ make test-local   # 本地测试脚本可用性
 
 | 依赖 | 说明 | 链接 |
 |------|------|------|
-| **Node.js >= 18** | 运行 `cc-router` CLI 所需 | https://nodejs.org |
-| **cc-connect** | 消息网关，把钉钉消息转发到本地 Agent | https://github.com/chenhg5/cc-connect |
-| **OpenCode CLI** | 轻量路由层，理解意图并调用脚本 | https://opencode.ai |
-| **Qoder CLI** | 真实执行层，命令名 `qodercli` | — |
-| **钉钉开发者账号** | 需在开放平台创建机器人，获取 `client_id` / `client_secret` | https://open.dingtalk.com |
+| **Node.js ≥ 18** | 运行 `cc-router` CLI 与 `serve` 守护 | https://nodejs.org |
+| **cc-connect** | 消息网关，把钉钉消息经 `acp` 转发到信使 | https://github.com/chenhg5/cc-connect |
+| **OpenAI 兼容 LLM 端点** | 信使 Agent 的模型（`base_url` + `api_key` + `model`） | 自建网关 / 代理 |
+| **tmux** | 写平面所需；读平面不需要 | `brew install tmux` |
+| **Claude Code / qodercli** | 被控制的 worker agent（至少装一个） | — |
+| **钉钉开发者账号** | 创建机器人，获取 `client_id`/`client_secret`，启用 Stream 模式 | https://open.dingtalk.com |
 
-> macOS 使用 `--timeout` 功能需额外安装 coreutils：`brew install coreutils`。
+## 🛠️ 开发
 
----
+```bash
+npm test            # node --test
+node bin/cli.js --help
+```
 
-## 🔧 故障排查
+## 📂 目录结构
 
-| 问题 | 可能原因 & 解决方法 |
-|------|--------------------|
-| **cc-connect 连接失败** | 检查配置中 `client_id` / `client_secret` 是否正确；确认钉钉应用已开启 **Stream 模式**；确认本机能访问外网。 |
-| **qodercli 未找到** | 脚本会报 `[ERROR] 未找到 'qodercli' 命令`。请确认 Qoder CLI 已安装并在 `PATH` 中；或用环境变量 `QODER_CLI` 指定可执行文件名。 |
-| **钉钉消息收不到** | 确认机器人已加入群聊 / 开启单聊；服务是否在运行；查看前台日志有无报错。 |
-| **任务执行超时** | 对耗时操作加 `--timeout <秒>` 参数；macOS 需先 `brew install coreutils` 才能使用 timeout 功能。 |
-| **脚本无执行权限** | 运行 `make install` 为 `scripts/*.sh` 添加可执行权限。 |
-| **找不到配置文件** | 运行 `cc-router init` 生成 `~/.cc-connect-router/config.toml`。 |
+```
+src/lib/control-plane.js   读写平面（复用 registry/transcript/tmux）
+src/lib/messenger/         信使栈：agent(AI SDK)/conductor/provider/pending/history
+src/lib/im/                gate（闸门路由）/ session-key（CC_SESSION_KEY 解析）
+src/server/                Fastify：http/routes/sse/auth（Web + /im/handle）
+web/                       控制台前端
+docs/                      GitHub Pages 使用介绍网站
+```
 
-排查前可先跑一遍 `make check` 确认依赖与配置状态，再用 `make test-local` 验证脚本能否正常调用。
+## 许可证
 
----
-
-Made with ❤️ · 让开发像发消息一样简单。
+MIT · 基于 [cc-connect](https://github.com/chenhg5/cc-connect)，设计参考 [lifestream](https://github.com/nitonitori/lifestream)

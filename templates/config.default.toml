@@ -1,20 +1,46 @@
-# cc-connect-router 默认配置
+# cc-connect-router 配置
 # 生成位置: ~/.cc-connect-router/config.toml
-# 使用 cc-router config set <key> <value> 修改配置
+# 修改方式: cc-router config set <key> <value>  或  Web 控制台配置页
 
+# ── Web 控制台（cc-router serve）──
+[web]
+host = "127.0.0.1"
+port = 8787
+token = ""              # 留空则首次 serve 时自动生成并打印
+
+# ── 信使 Agent（Vercel AI SDK / OpenAI-compatible）──
+[messenger]
+provider = "openai-compatible"   # 首批支持 openai-compatible
+model = "gpt-4o-mini"
+api_key = ""
+base_url = ""                    # 自建网关/兼容端点，如 https://your-gateway/v1
+max_steps = 8
+conversation_key = "messenger"   # Web 与 IM 共享的信使会话 key
+
+# ── IM 连接器闸门（按平台组织，便于扩展多 IM）──
+[im.platforms.dingtalk]
+enabled = true
+command_prefix = "/ai"           # 留空 = 处理所有消息
+allowed_sender_ids = []          # senderStaffId 白名单；留空 = 允许所有（依赖 cc-connect allow_from + 确认闸）
+confirm_words = ["确认", "确定", "yes", "y", "ok"]
+cancel_words = ["取消", "no", "n"]
+confirm_ttl_ms = 300000
+
+# ── cc-connect 转发：把信使作为它的 acp agent ──
 [[projects]]
-name = "router"
+name = "messenger"
 
 [projects.agent]
-type = "opencode"
+type = "acp"
 
 [projects.agent.options]
-work_dir = ""
-mode = "default"
+work_dir = "~"                   # 信使不依赖 work_dir，占位即可
+cmd = "cc-router"
+args = ["acp"]
 
 [[projects.platforms]]
 type = "dingtalk"
 
 [projects.platforms.options]
-client_id = ""
-client_secret = ""
+client_id = ""                   # 钉钉 AppKey
+client_secret = ""               # 钉钉 AppSecret

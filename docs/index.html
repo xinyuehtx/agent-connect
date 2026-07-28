@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cc-connect-router · 从手机控制本机的 AI 编码会话</title>
+  <meta name="description" content="从钉钉监控并控制本机上多个 coding agent 会话：信使 Agent 做意图分派、读写双平面、写操作人工确认、Web 控制台。Control your local AI coding sessions from DingTalk.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1017'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%235b8cff' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%235b8cff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body class="lang-zh">
+  <nav>
+    <div class="wrap">
+      <span class="logo">cc-connect<span class="dot">-router</span></span>
+      <div class="links">
+        <a href="#arch"><span class="zh">架构</span><span class="en">Architecture</span></a>
+        <a href="#planes"><span class="zh">读写平面</span><span class="en">Planes</span></a>
+        <a href="#start"><span class="zh">快速开始</span><span class="en">Quick start</span></a>
+        <a href="#cli">CLI</a>
+        <a href="https://github.com/xinyuehtx/connect" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <button class="langbtn" id="langBtn">EN / 中文</button>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap">
+      <span class="badge"><span class="zh">读写分离 · 一对多 · 安全闸</span><span class="en">Read/write split · one-to-many · human gate</span></span>
+      <h1>
+        <span class="zh">在钉钉里发一句话，<br>就能指挥本机的 <span class="grad">AI 编码会话</span></span>
+        <span class="en">Command your local <span class="grad">AI coding sessions</span><br>with one message from DingTalk</span>
+      </h1>
+      <p class="lead">
+        <span class="zh">监控并控制本机上运行的多个 Claude Code / qodercli 会话。一个轻量「信使 Agent」理解你的意图、决定读还是写、定位到哪个会话；变更操作必须你确认后才执行。配套 Web 控制台。</span>
+        <span class="en">Monitor and control many Claude Code / qodercli sessions on your machine. A lightweight “messenger agent” reads your intent, decides read vs. write, and targets the right session — every mutation waits for your confirmation. Ships with a web console.</span>
+      </p>
+      <div class="cta">
+        <a class="btn btn--primary" href="#start"><span class="zh">开始使用 →</span><span class="en">Get started →</span></a>
+        <a class="btn btn--ghost" href="https://github.com/xinyuehtx/connect" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="install">
+        <code class="mono">npm install -g @tengxiaohtx/connect</code>
+        <button class="copy" data-copy="npm install -g @tengxiaohtx/connect">复制</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- pillars -->
+  <section id="what">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">核心理念</span><span class="en">Core idea</span></div>
+      <h2><span class="zh">三层，各司其职</span><span class="en">Three layers, one job each</span></h2>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">🧭</div>
+          <h3><span class="zh">信使 Agent（寻址分派）</span><span class="en">Messenger Agent (dispatch)</span></h3>
+          <p>
+            <span class="zh">用 Vercel AI SDK 实现、与 Claude Code 解耦。只判断「读还是写 / 哪个会话 / 哪个动词」，任务本身仍交给 worker 执行。任意 OpenAI 兼容模型可配。</span>
+            <span class="en">Built on the Vercel AI SDK, decoupled from Claude Code. It only decides read-vs-write, which session, which verb — the task itself still runs in the worker. Any OpenAI-compatible model.</span>
+          </p>
+          <span class="tag"><span class="zh">非重路由</span><span class="en">not a re-router</span></span>
+        </div>
+        <div class="card">
+          <div class="ico">📖</div>
+          <h3><span class="zh">读写双平面</span><span class="en">Read / write planes</span></h3>
+          <p>
+            <span class="zh">读（list/read）只读落盘的 sessions 注册表与 transcript，零副作用、不碰 worker 进程——手机上狂刷也不污染上下文。写（send/takeover/run）经 tmux。</span>
+            <span class="en">Reads only touch on-disk session registries and transcripts — zero side effects, never the worker process. Writes (send/takeover/run) go through tmux.</span>
+          </p>
+          <span class="tag"><span class="zh">零污染</span><span class="en">zero pollution</span></span>
+        </div>
+        <div class="card">
+          <div class="ico">🔒</div>
+          <h3><span class="zh">安全闸</span><span class="en">Safety gate</span></h3>
+          <p>
+            <span class="zh">任何变更 worker 的操作走「提议 → 人工确认 → 执行」状态机，带白名单、命令前缀与确认超时。信使永远无法擅自动手。</span>
+            <span class="en">Every mutation runs a propose → confirm → execute state machine, with sender allowlist, command prefix, and TTL. The messenger can never act on its own.</span>
+          </p>
+          <span class="tag"><span class="zh">人工确认</span><span class="en">human-in-the-loop</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- architecture -->
+  <section id="arch">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">架构</span><span class="en">Architecture</span></div>
+      <h2><span class="zh">消息怎么流动</span><span class="en">How a message flows</span></h2>
+      <p class="sub">
+        <span class="zh">继续用 cc-connect 做钉钉 ↔ 本地传输。因 cc-connect 只能通过 <code>acp</code> 类型接入自定义程序，信使以一个 ACP 薄桥作为它的 agent，转发给 <code>cc-router serve</code> 守护。</span>
+        <span class="en">cc-connect stays the DingTalk ⇄ local transport. Since cc-connect only accepts custom programs via its <code>acp</code> agent type, the messenger plugs in as a thin ACP bridge that forwards to the <code>cc-router serve</code> daemon.</span>
+      </p>
+      <div class="diagram">
+<pre><span class="zh">钉钉</span><span class="en">DingTalk</span> ─Stream─► cc-connect ─exec─► <b>cc-router acp</b> ─HTTP─► <b>cc-router serve</b>
+                                                              │
+   ┌──────────────────────────────────────────────────────┐ │
+   │  Web <span class="zh">控制台</span><span class="en">console</span> + SSE + <span class="zh">配置页</span><span class="en">config</span>    <span class="zh">闸门</span><span class="en">gate</span> (allow/prefix)│◄┘
+   │        │  <span class="zh">共享 conductor / pending / 信使上下文</span><span class="en">shared conductor / pending / ctx</span> │
+   │  AgentConductor  ( propose → <span class="w">confirm</span> → execute )     │
+   │  Messenger Agent  ( AI SDK, OpenAI-compatible )        │
+   │        │  <span class="r">read tools</span>  /  <span class="w">propose tools</span>                    │
+   │  ControlPlane: <span class="r">listSessions·getMessages</span> · <span class="w">send·takeover·run</span> │
+   └──┬─────────────────┬──────────────────┬───────────────┘
+   registry.js       transcript.js        tmux.js</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- planes detail -->
+  <section id="planes">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">为什么这样设计</span><span class="en">Why this design</span></div>
+      <h2><span class="zh">读写分离，是自然语言下的守门人</span><span class="en">The split is the gatekeeper for natural language</span></h2>
+      <p class="sub">
+        <span class="zh">如果让被绑定的 worker 自己理解钉钉消息，一句「那任务咋样了」（读）就会进入它的工作上下文——读污染了写。独立信使 + 读写分离 + 人工确认，既保留「发一句话就行」的体验，又守住安全与上下文纯净。</span>
+        <span class="en">If the bound worker interpreted your chat itself, a “how’s that task going?” (a read) would land in its working context — reads polluting writes. A separate messenger + plane split + human confirm keeps the “just say it” UX while protecting safety and context.</span>
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>🟢 <span class="zh">读平面（带外）</span><span class="en">Read plane (out-of-band)</span></h3>
+          <p><span class="zh">直接读 <code class="mono">~/.claude/sessions/*.json</code> 与 <code class="mono">*.jsonl</code> transcript，完全不碰 agent 进程。工具：<code>list_sessions</code> / <code>read_session</code> / <code>get_status</code>。</span><span class="en">Reads <code class="mono">~/.claude/sessions/*.json</code> and <code class="mono">*.jsonl</code> transcripts directly, never the process. Tools: <code>list_sessions</code> / <code>read_session</code> / <code>get_status</code>.</span></p>
+        </div>
+        <div class="card">
+          <h3>🟠 <span class="zh">写平面（带内）</span><span class="en">Write plane (in-band)</span></h3>
+          <p><span class="zh">经 tmux 注入/接管/新建，且只暂存为提议。工具：<code>propose_send</code> / <code>propose_takeover</code> / <code>propose_run</code>，确认后才落地。</span><span class="en">Injects / takes over / spawns via tmux, staged as proposals only. Tools: <code>propose_send</code> / <code>propose_takeover</code> / <code>propose_run</code>, applied after confirm.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- quick start -->
+  <section id="start">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">快速开始</span><span class="en">Quick start</span></div>
+      <h2><span class="zh">四步跑起来</span><span class="en">Up and running in four steps</span></h2>
+      <div class="flow">
+        <div class="step"><div class="n">1</div><h4><span class="zh">初始化</span><span class="en">Init</span></h4><p><span class="zh">生成默认配置</span><span class="en">Create default config</span><br><code>cc-router init</code></p></div>
+        <div class="step"><div class="n">2</div><h4><span class="zh">起控制台</span><span class="en">Serve</span></h4><p><span class="zh">首启打印访问令牌</span><span class="en">Prints an access token</span><br><code>cc-router serve</code></p></div>
+        <div class="step"><div class="n">3</div><h4><span class="zh">配置</span><span class="en">Configure</span></h4><p><span class="zh">Web 设置页填 LLM 与钉钉</span><span class="en">Set LLM + DingTalk in the UI</span></p></div>
+        <div class="step"><div class="n">4</div><h4><span class="zh">连钉钉</span><span class="en">Connect</span></h4><p><span class="zh">另开终端拉起 cc-connect</span><span class="en">Start cc-connect</span><br><code>cc-router start</code></p></div>
+      </div>
+
+      <p class="sub" style="margin-top:34px">
+        <span class="zh">或全用 CLI 配置（等价于 Web 配置页）：</span>
+        <span class="en">Or configure entirely via CLI (equivalent to the settings page):</span>
+      </p>
+<pre class="code"><span class="c"># <span class="zh">信使 LLM（任意 OpenAI 兼容端点）</span><span class="en">messenger LLM (any OpenAI-compatible endpoint)</span></span>
+cc-router config <span class="k">set</span> messenger.base_url <span class="s">"https://your-gateway/v1"</span>
+cc-router config <span class="k">set</span> messenger.api_key  <span class="s">"sk-..."</span>
+cc-router config <span class="k">set</span> messenger.model    <span class="s">"gpt-4o-mini"</span>
+
+<span class="c"># <span class="zh">钉钉凭证（Stream 模式）</span><span class="en">DingTalk credentials (Stream mode)</span></span>
+cc-router config <span class="k">set</span> projects.0.platforms.0.options.client_id     <span class="s">"..."</span>
+cc-router config <span class="k">set</span> projects.0.platforms.0.options.client_secret <span class="s">"..."</span></pre>
+
+      <div class="note">
+        <span class="zh">💡 钉钉里默认要带前缀 <code>/ai</code> 才路由给信使（如 <code>/ai 列出会话</code>）；待确认时直接回「确认 / 取消」。写平面需要 <code>tmux</code>（<code>brew install tmux</code>），读平面不需要。</span>
+        <span class="en">💡 In DingTalk, messages need the <code>/ai</code> prefix to reach the messenger (e.g. <code>/ai list sessions</code>); reply “确认/取消” (yes/no) to a pending action. The write plane needs <code>tmux</code> (<code>brew install tmux</code>); reads don’t.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLI -->
+  <section id="cli">
+    <div class="wrap">
+      <div class="eyebrow">CLI</div>
+      <h2><span class="zh">命令参考</span><span class="en">Command reference</span></h2>
+      <table class="tbl">
+        <thead><tr><th><span class="zh">命令</span><span class="en">Command</span></th><th><span class="zh">说明</span><span class="en">What it does</span></th></tr></thead>
+        <tbody>
+          <tr><td><code>cc-router init</code></td><td><span class="zh">初始化配置目录与默认配置</span><span class="en">Create config dir + default config</span></td></tr>
+          <tr><td><code>cc-router serve</code></td><td><span class="zh">启动 Web 控制台 + 信使守护（读写平面 + 安全闸）</span><span class="en">Start web console + messenger daemon (planes + gate)</span></td></tr>
+          <tr><td><code>cc-router acp</code></td><td><span class="zh">ACP 薄桥，供 cc-connect 拉起（勿手动运行）</span><span class="en">ACP bridge for cc-connect (not run by hand)</span></td></tr>
+          <tr><td><code>cc-router start</code></td><td><span class="zh">启动 cc-connect（钉钉 ↔ 本地）</span><span class="en">Start cc-connect (DingTalk ⇄ local)</span></td></tr>
+          <tr><td><code>cc-router config set &lt;k&gt; &lt;v&gt;</code></td><td><span class="zh">修改配置（支持点号路径）</span><span class="en">Set a config value (dot path)</span></td></tr>
+          <tr><td><code>cc-router agent list</code></td><td><span class="zh">列出运行中的 agent 会话</span><span class="en">List running agent sessions</span></td></tr>
+          <tr><td><code>cc-router agent read &lt;id&gt;</code></td><td><span class="zh">只读查看状态与最新回复</span><span class="en">Read status + latest reply (read-only)</span></td></tr>
+          <tr><td><code>cc-router agent send &lt;id&gt; "…"</code></td><td><span class="zh">向 tmux 会话注入指令</span><span class="en">Inject into a tmux session</span></td></tr>
+          <tr><td><code>cc-router agent takeover &lt;id&gt;</code></td><td><span class="zh">接管非 tmux 会话</span><span class="en">Adopt a non-tmux session</span></td></tr>
+          <tr><td><code>cc-router agent run "…"</code></td><td><span class="zh">在 tmux 中新建可远控会话</span><span class="en">Spawn a new remote-controllable session</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <p>cc-connect-router · MIT ·
+        <a href="https://github.com/xinyuehtx/connect" target="_blank" rel="noopener">GitHub</a> ·
+        <a href="https://www.npmjs.com/package/@tengxiaohtx/connect" target="_blank" rel="noopener">npm</a> ·
+        <span class="zh">基于 <a href="https://github.com/chenhg5/cc-connect" target="_blank" rel="noopener">cc-connect</a>，设计参考 <a href="https://github.com/nitonitori/lifestream" target="_blank" rel="noopener">lifestream</a></span>
+        <span class="en">built on <a href="https://github.com/chenhg5/cc-connect" target="_blank" rel="noopener">cc-connect</a>, inspired by <a href="https://github.com/nitonitori/lifestream" target="_blank" rel="noopener">lifestream</a></span>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var saved = localStorage.getItem('ccr-lang');
+      var lang = saved || ((navigator.language || 'en').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
+      var apply = function (l) {
+        document.body.className = 'lang-' + l;
+        document.documentElement.lang = l === 'zh' ? 'zh' : 'en';
+        localStorage.setItem('ccr-lang', l);
+      };
+      apply(lang);
+      document.getElementById('langBtn').addEventListener('click', function () {
+        apply(document.body.classList.contains('lang-zh') ? 'en' : 'zh');
+      });
+      document.querySelectorAll('.copy').forEach(function (b) {
+        b.addEventListener('click', function () {
+          navigator.clipboard.writeText(b.dataset.copy).then(function () {
+            var t = b.textContent; b.textContent = '✓'; setTimeout(function () { b.textContent = t; }, 1200);
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

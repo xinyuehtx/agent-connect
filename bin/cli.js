@@ -13,6 +13,8 @@ const projectAdd = require('../src/commands/project-add');
 const projectRemove = require('../src/commands/project-remove');
 const projectList = require('../src/commands/project-list');
 const start = require('../src/commands/start');
+const serve = require('../src/commands/serve');
+const acp = require('../src/commands/acp');
 const agentList = require('../src/commands/agent-list');
 const agentRead = require('../src/commands/agent-read');
 const agentSend = require('../src/commands/agent-send');
@@ -85,6 +87,20 @@ program
   .command('start')
   .description('使用当前配置启动 cc-connect')
   .action(start);
+
+// serve：启动 Web 控制台 + 信使栈 + IM 闸门（长跑守护）
+program
+  .command('serve')
+  .description('启动 Web 控制台与信使 Agent 守护（读写平面 + 安全闸）')
+  .option('-H, --host <host>', 'Web 监听地址')
+  .option('-p, --port <port>', 'Web 监听端口')
+  .action(serve);
+
+// acp：作为 cc-connect 的 acp agent（由 cc-connect exec，勿手动运行）
+program
+  .command('acp')
+  .description('ACP 薄桥：供 cc-connect 作为 acp agent 拉起，转发消息给 serve 守护')
+  .action(acp);
 
 // agent 子命令组：发现与控制本机运行中的 Agent 会话
 const agent = program

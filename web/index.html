@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>cc-connect-router · 控制台</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <div class="login" id="login">
+    <div class="login__card">
+      <div class="login__mark">cc-connect<span class="dot">-router</span></div>
+      <div class="login__sub">本机 Agent 会话控制台</div>
+      <div class="login__row">
+        <input id="token" type="password" placeholder="访问令牌 (cc-router serve 启动时打印)" autocomplete="current-password">
+        <button class="btn" id="loginBtn">进入</button>
+      </div>
+      <div class="login__err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand">cc-connect<span class="dot">-router</span></div>
+      <div class="fleet">
+        <div class="fleet__stat"><span class="fleet__num is-busy" id="cntBusy">0</span><span class="fleet__label">运行中</span></div>
+        <div class="fleet__stat"><span class="fleet__num is-idle" id="cntIdle">0</span><span class="fleet__label">空闲</span></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="conn" id="conn"><span class="conn__dot"></span><span id="connText">连接中…</span></div>
+      <button class="iconbtn" id="settingsBtn">设置</button>
+      <button class="iconbtn" id="logoutBtn">退出</button>
+    </header>
+
+    <div class="body">
+      <aside class="rail" id="rail">
+        <div class="rail__head">
+          <span class="eyebrow">会话</span>
+          <button class="iconbtn" id="newBtn">+ 新建</button>
+        </div>
+        <div id="streams"></div>
+      </aside>
+
+      <main class="console" id="console">
+        <div class="placeholder" id="placeholder">
+          <div>从左侧选择一个会话，或与 <b>信使 Agent</b> 对话。</div>
+        </div>
+
+        <div id="consoleView" style="display:none;">
+          <div class="console__head">
+            <div class="console__title">
+              <div class="console__name" id="cvName">—</div>
+              <div class="console__sub mono" id="cvSub"></div>
+            </div>
+            <div class="console__actions" id="cvActions"></div>
+          </div>
+
+          <div class="confirm" id="confirmBox" style="display:none;">
+            <div class="confirm__title">待确认操作</div>
+            <ul class="confirm__list" id="confirmList"></ul>
+            <div class="confirm__row">
+              <button class="btn btn--warn" id="confirmYes">确认执行</button>
+              <button class="btn btn--ghost" id="confirmNo">取消</button>
+            </div>
+          </div>
+
+          <div class="stream-view" id="streamView">
+            <div id="messages"></div>
+          </div>
+
+          <div class="composer">
+            <textarea id="composerInput" rows="1" placeholder="输入消息…"></textarea>
+            <button class="btn" id="sendBtn">发送</button>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Settings modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal__card">
+      <div class="modal__head">
+        <div class="modal__title">设置</div>
+        <button class="modal__close" id="settingsClose">×</button>
+      </div>
+      <div class="tabs">
+        <button class="tab is-active" data-tab="llm">LLM Provider</button>
+        <button class="tab" data-tab="im">IM 连接器</button>
+      </div>
+
+      <div class="tabpane is-active" id="tab-llm">
+        <label>Provider</label>
+        <select id="llm_provider">
+          <option value="openai-compatible">openai-compatible</option>
+          <option value="openai">openai</option>
+        </select>
+        <label>Model</label>
+        <input id="llm_model" placeholder="gpt-4o-mini">
+        <label>Base URL <span class="hint">(openai-compatible 必填)</span></label>
+        <input id="llm_base_url" placeholder="https://your-gateway/v1">
+        <label>API Key</label>
+        <input id="llm_api_key" type="password" placeholder="留空保持不变">
+        <label>Max Steps</label>
+        <input id="llm_max_steps" type="number" placeholder="8">
+        <div class="modal__row"><button class="btn" id="llmSave">保存</button></div>
+      </div>
+
+      <div class="tabpane" id="tab-im">
+        <div class="section-label">钉钉凭证 (cc-connect)</div>
+        <label>Client ID (AppKey)</label>
+        <input id="im_client_id" placeholder="dingxxxx">
+        <label>Client Secret (AppSecret)</label>
+        <input id="im_client_secret" type="password" placeholder="留空保持不变">
+        <div class="section-label">闸门</div>
+        <label><input type="checkbox" id="im_enabled"> 启用</label>
+        <label>命令前缀 <span class="hint">(留空=处理所有消息)</span></label>
+        <input id="im_prefix" placeholder="/ai">
+        <label>白名单 senderStaffId <span class="hint">(逗号分隔，留空=允许所有)</span></label>
+        <input id="im_allow" placeholder="uid1, uid2">
+        <label>确认超时 (ms)</label>
+        <input id="im_ttl" type="number" placeholder="300000">
+        <div class="modal__row"><button class="btn" id="imSave">保存</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
