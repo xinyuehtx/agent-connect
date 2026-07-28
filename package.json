@@ -10,7 +10,8 @@
   "files": [
     "bin/",
     "src/",
-    "templates/"
+    "templates/",
+    "web/"
   ],
   "scripts": {
     "test": "node --test",
