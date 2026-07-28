@@ -21,9 +21,15 @@ async function buildModel(cfg) {
 
   if (provider === 'anthropic') {
     const { createAnthropic } = await import('@ai-sdk/anthropic');
+    // 部分网关（如内网 token-hub）要求 Authorization: Bearer 而非默认的 x-api-key。
+    // 设 auth_style = "bearer" 即改用 Bearer 头。
+    const headers = cfg.auth_style === 'bearer'
+      ? { authorization: `Bearer ${cfg.api_key}` }
+      : undefined;
     const anthropic = createAnthropic({
       apiKey: cfg.api_key || process.env.ANTHROPIC_API_KEY || 'sk-none',
-      baseURL: cfg.base_url || undefined, // 留空则用官方 api.anthropic.com；内网网关填 .../api/anthropic
+      baseURL: cfg.base_url || undefined, // 留空则用官方 api.anthropic.com；内网网关填 .../v1
+      headers,
     });
     return anthropic(cfg.model);
   }

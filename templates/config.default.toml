@@ -13,7 +13,8 @@ token = ""              # 留空则首次 serve 时自动生成并打印
 provider = "openai-compatible"   # openai-compatible | openai | anthropic
 model = "gpt-4o-mini"
 api_key = ""
-base_url = ""                    # 兼容端点如 https://gw/v1；anthropic 内网网关如 https://gw/api/anthropic
+base_url = ""                    # 兼容端点如 https://gw/v1；anthropic 内网网关如 https://gw/compatible/v1
+auth_style = ""                  # anthropic 专用：留空=默认 x-api-key；填 "bearer" 走 Authorization: Bearer（如内网 token-hub）
 max_steps = 8
 conversation_key = "messenger"   # Web 与 IM 共享的信使会话 key
 
