@@ -333,6 +333,7 @@ async function openSettings() {
   $('im_client_id').value = im.client_id || '';
   $('im_client_secret').value = '';
   $('im_client_secret').placeholder = im.client_secret ? '已设置（留空不变）' : '未设置';
+  $('im_card_tpl').value = im.card_template_id || '';
   $('im_enabled').checked = !!im.enabled;
   $('im_prefix').value = im.command_prefix || '';
   $('im_allow').value = (im.allowed_sender_ids || []).join(', ');
@@ -360,6 +361,8 @@ async function saveIm() {
   };
   const secret = $('im_client_secret').value.trim();
   if (secret) body.client_secret = secret;
+  const cardTpl = $('im_card_tpl').value.trim();
+  if (cardTpl) body.card_template_id = cardTpl;
   const r = await api('/api/config/im', { method: 'POST', body: JSON.stringify(body) });
   toast(r.ok ? 'IM 配置已保存' : '保存失败');
 }

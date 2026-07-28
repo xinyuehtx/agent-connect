@@ -85,6 +85,26 @@ The LLM uses the Vercel AI SDK. First-class support is **OpenAI-compatible** (`b
 
 ---
 
+## 🌐 Any IM (not just DingTalk)
+
+Because cc-connect bridges **many platforms** (DingTalk, Feishu, Telegram, Slack, Discord, WeChat Work, QQ, LINE…), and our messenger plugs in as its platform-agnostic `acp` agent, cc-connect-router works with **any of them**. The ACP bridge reads the platform from cc-connect's `CC_SESSION_KEY` and applies the matching gate.
+
+To add an IM:
+1. Configure that platform in the cc-connect side of `~/.cc-connect-router/config.toml` (its own `[[projects.platforms]]` + credentials — see cc-connect docs).
+2. (Optional) Add a gate for it: `[im.platforms.<name>]` with `enabled` / `command_prefix` / `allowed_sender_ids` / confirm words. If omitted, defaults apply (enabled, empty allowlist = allow all).
+
+The messenger, read/write planes, and confirm gate are identical across platforms — only the transport differs.
+
+## 📇 Access control & clear denials
+
+When a sender isn't in `allowed_sender_ids`, the bot **replies with an explicit “not authorized” message** (instead of silence), telling you which ID to add. Empty allowlist = allow all. The sender ID is whatever the platform reports (e.g. DingTalk `senderStaffId`).
+
+## 🖌️ Streaming AI card (DingTalk, optional)
+
+For a typewriter-style streaming reply, create an **AI card template** on the DingTalk Open Platform and set its id — `card_template_id` (+ optional `card_template_key`, `card_throttle_ms`) under the DingTalk platform options, or via the web **Settings → IM connector → Streaming AI card**. If unset, replies fall back to normal messages (fully functional, just not streamed).
+
+---
+
 ## 📖 CLI reference
 
 | Command | Description |
@@ -223,6 +243,26 @@ cc-router config set projects.0.platforms.0.options.client_secret "your-dingtalk
 - **提议工具**（`propose_send` / `propose_takeover` / `propose_run`）：**只暂存**，不执行。信使会回一张待确认清单，你回「确认」才真正经 tmux 执行，「取消」或超时（默认 5 分钟）则作废。
 
 LLM 用 Vercel AI SDK，首批支持 **OpenAI-compatible**（`base_url` + `api_key` + `model`），覆盖自建网关/代理/多数兼容端点，与 Claude Code 完全解耦。可在 Web 配置页或 config 文件切换。
+
+---
+
+## 🌐 支持任意 IM（不止钉钉）
+
+cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、Discord、企业微信、QQ、LINE…），而我们的信使以**平台无关**的 `acp` agent 接入，所以 cc-connect-router 对**任意平台**都适用。ACP 薄桥从 `CC_SESSION_KEY` 解析出平台名，套用对应闸门。
+
+接入一个新 IM：
+1. 在 `~/.cc-connect-router/config.toml` 的 cc-connect 部分配好该平台（它自己的 `[[projects.platforms]]` + 凭证，见 cc-connect 文档）。
+2. （可选）给它加一段闸门：`[im.platforms.<平台名>]`，含 `enabled` / `command_prefix` / `allowed_sender_ids` / 确认词。不配则用默认（启用、空白名单=允许所有）。
+
+信使、读写平面、确认闸在所有平台完全一致，只有传输层不同。
+
+## 📇 访问控制与明确拒绝
+
+当发送者不在 `allowed_sender_ids` 时，机器人会**明确回复「无权限」**（而不是静默），并提示该把哪个 ID 加进名单。名单留空 = 允许所有。发送者 ID 取平台上报值（如钉钉 `senderStaffId`）。
+
+## 🖌️ 流式 AI 卡片（钉钉，可选）
+
+想要打字机式流式回复：在钉钉开放平台创建 **AI 卡片模板**，把它的 id 填到钉钉平台选项的 `card_template_id`（另可选 `card_template_key`、`card_throttle_ms`），或在 Web **设置 → IM 连接器 → 流式 AI 卡片** 里填。不填则回退为普通消息（功能不受影响，只是非流式）。
 
 ---
 

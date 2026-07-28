@@ -10,11 +10,13 @@ const { FilePendingStore } = require('../src/lib/messenger/pending-store');
 const { FileHistoryStore } = require('../src/lib/messenger/history-store');
 const { AgentConductor, formatResult } = require('../src/lib/messenger/conductor');
 const { describeAction } = require('../src/lib/messenger/describe');
-const { routeMessage, isDecision } = require('../src/lib/im/gate');
+const { classifyMessage, isDecision } = require('../src/lib/im/gate');
 const { parseSessionKey } = require('../src/lib/im/session-key');
 const { validateProviderConfig } = require('../src/lib/messenger/provider');
+const { llmErrorMessage } = require('../src/lib/messenger/agent');
 const { historyToEvents, mask } = require('../src/server/routes');
 const { toSummary, toEvent } = require('../src/lib/control-plane');
+const { gateFor } = require('../src/lib/app-config');
 
 function tmpFile(name) {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-')), name);
@@ -22,34 +24,45 @@ function tmpFile(name) {
 
 /* ---------------- gate ---------------- */
 
-test('gate.routeMessage: no prefix processes everything', () => {
+test('gate.classifyMessage: no prefix routes everything', () => {
   const gate = { enabled: true, command_prefix: '' };
-  assert.strictEqual(routeMessage({ text: '  hi  ', gate }), 'hi');
+  assert.deepStrictEqual(classifyMessage({ text: '  hi  ', gate }), { action: 'route', text: 'hi' });
 });
 
-test('gate.routeMessage: prefix strips and ignores non-prefixed', () => {
+test('gate.classifyMessage: prefix strips; non-prefixed ignored', () => {
   const gate = { enabled: true, command_prefix: '/ai' };
-  assert.strictEqual(routeMessage({ text: '/ai 列出会话', gate }), '列出会话');
-  assert.strictEqual(routeMessage({ text: '闲聊', gate }), null);
+  assert.deepStrictEqual(classifyMessage({ text: '/ai 列出会话', gate }), { action: 'route', text: '列出会话' });
+  assert.strictEqual(classifyMessage({ text: '闲聊', gate }).action, 'ignore');
 });
 
-test('gate.routeMessage: allowlist denies non-members', () => {
+test('gate.classifyMessage: allowlist denies non-members (with clear signal)', () => {
   const gate = { enabled: true, command_prefix: '', allowed_sender_ids: ['u1'] };
-  assert.strictEqual(routeMessage({ text: 'x', senderId: 'u1', gate }), 'x');
-  assert.strictEqual(routeMessage({ text: 'x', senderId: 'u2', gate }), null);
+  assert.deepStrictEqual(classifyMessage({ text: 'x', senderId: 'u1', gate }), { action: 'route', text: 'x' });
+  const denied = classifyMessage({ text: 'x', senderId: 'u2', gate });
+  assert.strictEqual(denied.action, 'deny');
+  assert.strictEqual(denied.senderId, 'u2');
 });
 
-test('gate.routeMessage: disabled returns null', () => {
-  assert.strictEqual(routeMessage({ text: 'x', gate: { enabled: false } }), null);
+test('gate.classifyMessage: disabled → ignore', () => {
+  assert.strictEqual(classifyMessage({ text: 'x', gate: { enabled: false } }).action, 'ignore');
 });
 
-test('gate.routeMessage: bare confirm/cancel passes only when pending exists', () => {
+test('gate.classifyMessage: bare confirm/cancel routes only when pending exists', () => {
   const gate = {
     enabled: true, command_prefix: '/ai', confirm_words: ['确认'], cancel_words: ['取消'],
   };
-  assert.strictEqual(routeMessage({ text: '确认', gate, pendingCount: 0 }), null);
-  assert.strictEqual(routeMessage({ text: '确认', gate, pendingCount: 1 }), '确认');
+  assert.strictEqual(classifyMessage({ text: '确认', gate, pendingCount: 0 }).action, 'ignore');
+  assert.deepStrictEqual(classifyMessage({ text: '确认', gate, pendingCount: 1 }), { action: 'route', text: '确认' });
   assert.ok(isDecision('取消', gate));
+});
+
+test('app-config.gateFor merges defaults for any platform', () => {
+  const raw = { im: { platforms: { telegram: { command_prefix: '/x' } } } };
+  const g = gateFor(raw, 'telegram');
+  assert.strictEqual(g.command_prefix, '/x');
+  assert.ok(Array.isArray(g.confirm_words)); // default merged
+  // unknown platform → all defaults (enabled, empty allowlist = allow all)
+  assert.strictEqual(gateFor(raw, 'slack').enabled, true);
 });
 
 /* ---------------- session-key ---------------- */
@@ -212,6 +225,15 @@ test('mask hides all but last 4', () => {
   assert.strictEqual(mask('secretkey123'), '****y123');
   assert.strictEqual(mask('ab'), '****');
   assert.strictEqual(mask(''), '');
+});
+
+test('llmErrorMessage surfaces real reason from responseBody', () => {
+  const e = { statusCode: 400, message: '', responseBody: JSON.stringify({ message: '超过了10次/60.0分钟' }) };
+  assert.strictEqual(llmErrorMessage(e), '[400] 超过了10次/60.0分钟');
+  // falls back to error.message
+  assert.strictEqual(llmErrorMessage({ message: 'boom' }), 'boom');
+  // handles nested error.message shape
+  assert.match(llmErrorMessage({ statusCode: 401, responseBody: JSON.stringify({ error: { message: 'bad key' } }) }), /bad key/);
 });
 
 test('historyToEvents maps user/assistant + tool calls', () => {

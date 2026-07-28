@@ -124,5 +124,10 @@ pre.code .k { color: var(--brand); }
 /* callout */
 .note { background: rgba(91,140,255,.07); border: 1px solid rgba(91,140,255,.3); border-radius: 12px; padding: 14px 18px; color: var(--muted); font-size: 14px; margin-top: 22px; }
 
+/* platform chips */
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.chip { background: var(--panel); border: 1px solid var(--line); border-radius: 24px; padding: 8px 16px; font-size: 14px; color: var(--text); }
+.chip:hover { border-color: var(--brand); color: var(--brand); }
+
 footer { border-top: 1px solid var(--line); padding: 34px 0; color: var(--dim); font-size: 14px; text-align: center; }
 footer a { color: var(--muted); }

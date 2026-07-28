@@ -75,6 +75,17 @@ function findDingtalkPlatformOptions(raw) {
   return null;
 }
 
+/**
+ * 取指定 IM 平台的闸门配置（合并默认值）。平台未配置时返回默认（enabled + 空白名单=允许所有）。
+ * @param {object} raw 原始配置
+ * @param {string} platform 如 'dingtalk' / 'feishu' / 'telegram' / 'slack' ...
+ * @returns {object}
+ */
+function gateFor(raw, platform) {
+  const platforms = (raw.im && raw.im.platforms) || {};
+  return { ...DEFAULTS.dingtalk, ...(platforms[platform] || {}) };
+}
+
 module.exports = {
   DEFAULTS,
   expandHome,
@@ -82,4 +93,5 @@ module.exports = {
   saveConfig,
   loadConfig,
   findDingtalkPlatformOptions,
+  gateFor,
 };

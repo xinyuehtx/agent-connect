@@ -14,35 +14,36 @@ function isDecision(text, gate) {
 }
 
 /**
- * IM 摄入闸门：决定一条消息是否路由给信使、以及路由后的文本。
- * 返回 null = 忽略（非本机器人消息 / 未过白名单 / 无前缀普通消息）。
- * 移植 lifestream ImLinker.route + 白名单逻辑。
+ * IM 摄入闸门分类：决定一条消息如何处理。
+ *   { action:'route', text } —— 交给信使
+ *   { action:'deny', reason, senderId } —— 明确拒绝（不在白名单），应回一条提示
+ *   { action:'ignore' } —— 静默忽略（未启用 / 有前缀但非命令的普通闲聊）
  * @param {object} args { text, senderId, gate, pendingCount }
- * @returns {string|null}
+ * @returns {{action:string, text?:string, reason?:string, senderId?:string}}
  */
-function routeMessage({
+function classifyMessage({
   text, senderId, gate, pendingCount = 0,
 }) {
   if (!gate || !gate.enabled) {
-    return null;
+    return { action: 'ignore' };
   }
   const allow = gate.allowed_sender_ids || [];
   if (allow.length && senderId && !allow.includes(senderId)) {
-    return null;
+    return { action: 'deny', reason: 'not_allowed', senderId };
   }
   const trimmed = String(text || '').trim();
   const prefix = gate.command_prefix || '';
   if (!prefix) {
-    return trimmed;
+    return { action: 'route', text: trimmed };
   }
   if (trimmed.startsWith(prefix)) {
-    return trimmed.slice(prefix.length).trim();
+    return { action: 'route', text: trimmed.slice(prefix.length).trim() };
   }
   // 待确认时允许裸「确认/取消」直接决策，无需前缀
   if (pendingCount > 0 && isDecision(trimmed, gate)) {
-    return trimmed;
+    return { action: 'route', text: trimmed };
   }
-  return null;
+  return { action: 'ignore' };
 }
 
-module.exports = { routeMessage, isDecision };
+module.exports = { classifyMessage, isDecision };

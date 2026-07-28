@@ -3,6 +3,27 @@
 const { z } = require('zod');
 const { buildModel } = require('./provider');
 
+/**
+ * 从 AI SDK 错误里提取人类可读信息（很多网关把真实原因放在 responseBody，而 error.message 为空）。
+ * @param {*} e
+ * @returns {string}
+ */
+function llmErrorMessage(e) {
+  let detail = '';
+  const body = e && (e.responseBody || (e.data ? JSON.stringify(e.data) : ''));
+  if (body) {
+    try {
+      const j = typeof body === 'string' ? JSON.parse(body) : body;
+      detail = j.message || (j.error && j.error.message) || j.detailMessage || '';
+    } catch (_) {
+      detail = String(body).slice(0, 200);
+    }
+  }
+  const base = (e && e.message) || '';
+  const sc = e && e.statusCode ? `[${e.statusCode}] ` : '';
+  return `${sc}${detail || base || 'LLM 调用失败'}`;
+}
+
 const SYSTEM_PROMPT = [
   '你是 cc-connect-router 的「信使」助手：帮用户从聊天里监控与控制本机上其它正在运行的 coding agent 会话（Claude Code / qodercli）。',
   '',
@@ -128,13 +149,21 @@ class Messenger {
     const history = this.historyStore.get(conversationKey);
     const messages = [...history, { role: 'user', content: userText }];
 
-    const result = await generateText({
-      model,
-      system: SYSTEM_PROMPT,
-      messages,
-      tools,
-      stopWhen: stepCountIs(cfg.max_steps || 8),
-    });
+    let result;
+    try {
+      result = await generateText({
+        model,
+        system: SYSTEM_PROMPT,
+        messages,
+        tools,
+        stopWhen: stepCountIs(cfg.max_steps || 8),
+      });
+    } catch (e) {
+      // 抛出带真实原因的错误（限流/鉴权/模型权限等），避免上层只拿到空串
+      const err = new Error(llmErrorMessage(e));
+      err.cause = e;
+      throw err;
+    }
 
     const updated = [...messages, ...result.response.messages];
     this.historyStore.set(conversationKey, updated);
@@ -142,4 +171,4 @@ class Messenger {
   }
 }
 
-module.exports = { Messenger, buildTools, SYSTEM_PROMPT };
+module.exports = { Messenger, buildTools, SYSTEM_PROMPT, llmErrorMessage };

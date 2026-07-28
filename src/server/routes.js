@@ -174,7 +174,7 @@ function registerRoutes(app, deps) {
     return { ok: true };
   }));
 
-  // ---- IM 摄入闸门（供 ACP 薄桥调用）----
+  // ---- IM 摄入闸门（供 ACP 薄桥调用，平台无关）----
   // 单独 Bearer 校验（preHandler 只管 /api/*）。
   app.post('/im/handle', async (req, reply) => {
     const provided = extractToken({ headers: req.headers, cookies: req.cookies || {} });
@@ -185,11 +185,22 @@ function registerRoutes(app, deps) {
       return reply.send({ ignored: true, reason: 'agent disabled' });
     }
     const body = req.body || {};
-    const gate = config.getGate();
-    const routed = deps.route(body.text, body.senderId, gate);
-    if (routed === null) {
+    const platform = body.platform || 'dingtalk';
+    const gate = config.getGate(platform);
+    const cls = deps.classify(body.text, body.senderId, gate);
+
+    if (cls.action === 'ignore') {
       return reply.send({ ignored: true });
     }
+    if (cls.action === 'deny') {
+      // 明确告知未授权（而不是静默），便于用户排查白名单
+      return reply.send({
+        reply: `⛔ 无权限：你的 ${platform} 账号 ID（${cls.senderId || '未知'}）不在允许名单中。\n`
+          + `请把它加入 im.platforms.${platform}.allowed_sender_ids（或留空该名单以允许所有人）。`,
+        denied: true,
+      });
+    }
+    const routed = cls.text;
     if (!routed) {
       return reply.send({ reply: `用法：${gate.command_prefix || ''} <指令>`.trim() });
     }
@@ -197,7 +208,8 @@ function registerRoutes(app, deps) {
       const result = await agent.conductor.handle(agent.conversationKey, routed);
       return reply.send({ reply: formatResult(result), kind: result.kind });
     } catch (e) {
-      return reply.send({ reply: `处理出错: ${e.message}` });
+      console.error('[cc-router] /im/handle error:', e && e.message);
+      return reply.send({ reply: `处理出错: ${(e && e.message) || e}` });
     }
   });
 }

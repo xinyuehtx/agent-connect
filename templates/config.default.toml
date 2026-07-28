@@ -17,14 +17,22 @@ base_url = ""                    # 兼容端点如 https://gw/v1；anthropic 内
 max_steps = 8
 conversation_key = "messenger"   # Web 与 IM 共享的信使会话 key
 
-# ── IM 连接器闸门（按平台组织，便于扩展多 IM）──
+# ── IM 连接器闸门（平台无关：按 CC_SESSION_KEY 的平台名匹配 im.platforms.<name>）──
+# cc-connect 支持 钉钉/飞书/Telegram/Slack/Discord/企业微信/QQ 等；
+# 每接入一个 IM，就在这里加一段同名闸门（不配则用默认：启用 + 空白名单=允许所有）。
 [im.platforms.dingtalk]
 enabled = true
 command_prefix = "/ai"           # 留空 = 处理所有消息
-allowed_sender_ids = []          # senderStaffId 白名单；留空 = 允许所有（依赖 cc-connect allow_from + 确认闸）
+allowed_sender_ids = []          # 发送者 ID 白名单；留空 = 允许所有（不匹配时机器人会明确回复无权限）
 confirm_words = ["确认", "确定", "yes", "y", "ok"]
 cancel_words = ["取消", "no", "n"]
 confirm_ttl_ms = 300000
+
+# 其它 IM 示例（把 cc-connect 的对应平台配好后，按需加闸门）：
+# [im.platforms.telegram]
+# enabled = true
+# command_prefix = ""
+# allowed_sender_ids = []
 
 # ── cc-connect 转发：把信使作为它的 acp agent ──
 [[projects]]
@@ -44,3 +52,8 @@ type = "dingtalk"
 [projects.platforms.options]
 client_id = ""                   # 钉钉 AppKey
 client_secret = ""               # 钉钉 AppSecret
+# 流式 AI 卡片（可选）：在钉钉开放平台创建「AI 卡片模板」后填其 templateId，
+# 回复即以打字机式流式呈现；不填则回退为普通消息（功能不受影响）。
+# card_template_id = ""
+# card_template_key = "content"
+# card_throttle_ms = 300

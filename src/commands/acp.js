@@ -27,13 +27,15 @@ function textFromPrompt(prompt) {
 async function forwardToDaemon(text) {
   const app = loadAppConfig();
   const { host, port, token } = app.web;
-  const { conversationId, senderId } = parseSessionKey(process.env.CC_SESSION_KEY);
+  const { platform, conversationId, senderId } = parseSessionKey(process.env.CC_SESSION_KEY);
   const url = `http://${host}:${port}/im/handle`;
   try {
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ conversationId, senderId, text }),
+      body: JSON.stringify({
+        platform: platform || 'dingtalk', conversationId, senderId, text,
+      }),
     });
     if (!r.ok) {
       return { reply: `信使服务返回 ${r.status}` };

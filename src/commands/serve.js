@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const { CONFIG_DIR, CONFIG_FILE } = require('../lib/paths');
 const {
-  loadAppConfig, loadConfig, saveConfig, findDingtalkPlatformOptions,
+  loadAppConfig, loadConfig, saveConfig, findDingtalkPlatformOptions, gateFor,
 } = require('../lib/app-config');
 const { ControlPlane } = require('../lib/control-plane');
 const { SseHub } = require('../server/sse');
@@ -14,7 +14,7 @@ const { FilePendingStore } = require('../lib/messenger/pending-store');
 const { FileHistoryStore } = require('../lib/messenger/history-store');
 const { Messenger } = require('../lib/messenger/agent');
 const { AgentConductor } = require('../lib/messenger/conductor');
-const { routeMessage } = require('../lib/im/gate');
+const { classifyMessage } = require('../lib/im/gate');
 const { validateProviderConfig } = require('../lib/messenger/provider');
 
 /**
@@ -72,15 +72,17 @@ async function serve(opts = {}) {
     plane,
     pending,
     // 实时读取闸门配置：Web 配置页改确认词/超时后立即生效，无需重启
-    confirmTtlMs: () => loadAppConfig().im.platforms.dingtalk.confirm_ttl_ms,
-    confirmWords: () => loadAppConfig().im.platforms.dingtalk.confirm_words,
-    cancelWords: () => loadAppConfig().im.platforms.dingtalk.cancel_words,
+    confirmTtlMs: () => gateFor(loadConfig(), 'dingtalk').confirm_ttl_ms,
+    confirmWords: () => gateFor(loadConfig(), 'dingtalk').confirm_words,
+    cancelWords: () => gateFor(loadConfig(), 'dingtalk').cancel_words,
     onExecute: (a, ok) => console.log(`[cc-router] execute ${a.kind} ok=${ok}`),
   });
 
   // 配置 API（Web 配置页用）
   const MSG_FIELDS = ['provider', 'model', 'api_key', 'base_url', 'max_steps', 'conversation_key'];
   const GATE_FIELDS = ['enabled', 'command_prefix', 'allowed_sender_ids', 'confirm_words', 'cancel_words', 'confirm_ttl_ms'];
+  // cc-connect 钉钉平台的凭证/流式卡片选项（写入 projects[].platforms[dingtalk].options）
+  const DT_OPT_FIELDS = ['card_template_id', 'card_template_key', 'card_throttle_ms'];
   const config = {
     getMessenger: () => ({ ...loadAppConfig().messenger }),
     setMessenger: (patch) => {
@@ -95,13 +97,16 @@ async function serve(opts = {}) {
       Object.assign(messengerCfg, raw.messenger);
     },
     getIm: () => {
-      const gate = loadAppConfig().im.platforms.dingtalk;
+      const gate = gateFor(loadConfig(), 'dingtalk');
       const raw = loadConfig();
       const dt = findDingtalkPlatformOptions(raw) || {};
       return {
         ...gate,
         client_id: dt.client_id || '',
         client_secret: dt.client_secret ? '****' : '',
+        card_template_id: dt.card_template_id || '',
+        card_template_key: dt.card_template_key || '',
+        card_throttle_ms: dt.card_throttle_ms || '',
       };
     },
     setIm: (patch) => {
@@ -116,14 +121,18 @@ async function serve(opts = {}) {
       if (dt) {
         if (patch.client_id !== undefined) dt.client_id = patch.client_id;
         if (patch.client_secret) dt.client_secret = patch.client_secret;
+        for (const k of DT_OPT_FIELDS) {
+          if (patch[k] !== undefined && patch[k] !== '') dt[k] = patch[k];
+        }
       }
       saveConfig(raw);
     },
-    getGate: () => loadAppConfig().im.platforms.dingtalk,
+    // 平台无关：按 CC_SESSION_KEY 解析出的平台名取闸门（未配置则用默认）
+    getGate: (platform) => gateFor(loadConfig(), platform || 'dingtalk'),
   };
 
-  // /im/handle 的路由闸门（注入 pending 计数以支持裸确认/取消）
-  const route = (text, senderId, gate) => routeMessage({
+  // /im/handle 的分类闸门（注入 pending 计数以支持裸确认/取消）
+  const classify = (text, senderId, gate) => classifyMessage({
     text, senderId, gate, pendingCount: pending.get(conversationKey).length,
   });
 
@@ -135,7 +144,7 @@ async function serve(opts = {}) {
       conductor, pending, historyStore, conversationKey,
     },
     config,
-    route,
+    classify,
   });
 
   await plane.start();

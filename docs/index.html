@@ -15,6 +15,7 @@
       <div class="links">
         <a href="#arch"><span class="zh">架构</span><span class="en">Architecture</span></a>
         <a href="#planes"><span class="zh">读写平面</span><span class="en">Planes</span></a>
+        <a href="#platforms"><span class="zh">任意 IM</span><span class="en">Any IM</span></a>
         <a href="#start"><span class="zh">快速开始</span><span class="en">Quick start</span></a>
         <a href="#cli">CLI</a>
         <a href="https://github.com/xinyuehtx/connect" target="_blank" rel="noopener">GitHub</a>
@@ -125,6 +126,31 @@
           <h3>🟠 <span class="zh">写平面（带内）</span><span class="en">Write plane (in-band)</span></h3>
           <p><span class="zh">经 tmux 注入/接管/新建，且只暂存为提议。工具：<code>propose_send</code> / <code>propose_takeover</code> / <code>propose_run</code>，确认后才落地。</span><span class="en">Injects / takes over / spawns via tmux, staged as proposals only. Tools: <code>propose_send</code> / <code>propose_takeover</code> / <code>propose_run</code>, applied after confirm.</span></p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- any IM -->
+  <section id="platforms">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">任意 IM</span><span class="en">Any IM</span></div>
+      <h2><span class="zh">不止钉钉 —— 桥接任意聊天平台</span><span class="en">Not just DingTalk — bridge any chat platform</span></h2>
+      <p class="sub">
+        <span class="zh">通信层用 cc-connect，它支持多种 IM；信使以<b>平台无关</b>的 ACP agent 接入，从 <code>CC_SESSION_KEY</code> 解析平台名并套用对应闸门。信使、读写平面、确认闸在所有平台完全一致，只有传输层不同。</span>
+        <span class="en">Transport is cc-connect, which supports many IMs; the messenger plugs in as a <b>platform-agnostic</b> ACP agent, reads the platform from <code>CC_SESSION_KEY</code>, and applies its gate. Messenger, planes, and the confirm gate are identical everywhere — only the transport differs.</span>
+      </p>
+      <div class="chips">
+        <span class="chip">钉钉 DingTalk</span><span class="chip">飞书 Feishu</span><span class="chip">Telegram</span>
+        <span class="chip">Slack</span><span class="chip">Discord</span><span class="chip">企业微信 WeCom</span>
+        <span class="chip">QQ</span><span class="chip">LINE</span><span class="chip">Weixin</span>
+      </div>
+      <p class="sub" style="margin-top:22px">
+        <span class="zh"><b>接入新 IM：</b>① 在配置里配好该平台的 cc-connect 段（凭证等，见 cc-connect 文档）；② 可选加一段闸门 <code>[im.platforms.&lt;名&gt;]</code>（前缀 / 白名单 / 确认词），不配则用默认（启用、空白名单=允许所有）。</span>
+        <span class="en"><b>Add an IM:</b> ① configure that platform's cc-connect block (credentials, per cc-connect docs); ② optionally add a gate <code>[im.platforms.&lt;name&gt;]</code> (prefix / allowlist / confirm words) — omit for defaults (enabled, empty allowlist = allow all).</span>
+      </p>
+      <div class="note">
+        <span class="zh">🖌️ <b>流式 AI 卡片（钉钉，可选）</b>：在钉钉开放平台建「AI 卡片模板」，把 templateId 填到 <code>card_template_id</code>（或 Web 设置页），回复即打字机式流式呈现；不填则回退普通消息，功能不受影响。<br>📇 <b>访问控制</b>：发送者不在白名单时会收到明确的「无权限」提示，而非静默。</span>
+        <span class="en">🖌️ <b>Streaming AI card (DingTalk, optional)</b>: create an AI card template on the DingTalk Open Platform and set its <code>card_template_id</code> (or via the web settings) for typewriter-style streaming; otherwise replies fall back to normal messages.<br>📇 <b>Access control</b>: senders not in the allowlist get an explicit “not authorized” reply, not silence.</span>
       </div>
     </div>
   </section>
