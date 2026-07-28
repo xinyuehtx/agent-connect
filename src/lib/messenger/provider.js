@@ -1,9 +1,37 @@
 'use strict';
 
 /**
+ * 有些 Anthropic 兼容网关（如 idealab 的推理模型 Peach）返回的 thinking 块缺少 signature 字段，
+ * 会让 AI SDK 的严格校验在 200 响应上报错。此 fetch 包装：对 JSON 消息响应，剔除缺 signature 的
+ * thinking 块（我们只用最终 text，不依赖 reasoning），从而让这类模型可用。流式(SSE)响应原样放行。
+ * @returns {typeof fetch}
+ */
+function makeAnthropicFetch() {
+  return async (url, init) => {
+    const res = await fetch(url, init);
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      return res;
+    }
+    const text = await res.text();
+    try {
+      const j = JSON.parse(text);
+      if (j && Array.isArray(j.content)) {
+        j.content = j.content.filter((b) => !(b && b.type === 'thinking' && !b.signature));
+      }
+      const h = new Headers(res.headers);
+      h.delete('content-length');
+      return new Response(JSON.stringify(j), { status: res.status, statusText: res.statusText, headers: h });
+    } catch (_) {
+      return new Response(text, { status: res.status, statusText: res.statusText, headers: res.headers });
+    }
+  };
+}
+
+/**
  * 按配置构造 AI SDK 语言模型。
- * 首批支持 openai-compatible（自建网关/兼容端点）；预留 openai/anthropic/google。
- * @param {object} cfg messenger 配置 { provider, model, api_key, base_url }
+ * 首批支持 openai-compatible（自建网关/兼容端点）与 anthropic；预留 google。
+ * @param {object} cfg messenger 配置 { provider, model, api_key, base_url, auth_style }
  * @returns {Promise<object>} AI SDK LanguageModel
  */
 async function buildModel(cfg) {
@@ -30,6 +58,7 @@ async function buildModel(cfg) {
       apiKey: cfg.api_key || process.env.ANTHROPIC_API_KEY || 'sk-none',
       baseURL: cfg.base_url || undefined, // 留空则用官方 api.anthropic.com；内网网关填 .../v1
       headers,
+      fetch: makeAnthropicFetch(), // 兼容返回无 signature thinking 块的推理模型
     });
     return anthropic(cfg.model);
   }
