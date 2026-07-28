@@ -1,6 +1,6 @@
 {
   "name": "@tengxiaohtx/connect",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "CLI tool for managing cc-connect-router configuration",
   "type": "commonjs",
   "bin": {
