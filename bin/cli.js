@@ -13,6 +13,11 @@ const projectAdd = require('../src/commands/project-add');
 const projectRemove = require('../src/commands/project-remove');
 const projectList = require('../src/commands/project-list');
 const start = require('../src/commands/start');
+const agentList = require('../src/commands/agent-list');
+const agentRead = require('../src/commands/agent-read');
+const agentSend = require('../src/commands/agent-send');
+const agentTakeover = require('../src/commands/agent-takeover');
+const agentRun = require('../src/commands/agent-run');
 
 program
   .name('cc-router')
@@ -80,5 +85,45 @@ program
   .command('start')
   .description('使用当前配置启动 cc-connect')
   .action(start);
+
+// agent 子命令组：发现与控制本机运行中的 Agent 会话
+const agent = program
+  .command('agent')
+  .description('发现与控制本机运行中的 Agent 会话');
+
+agent
+  .command('list')
+  .description('列出运行中的 Agent 会话')
+  .option('-a, --all', '包含已退出/仅存磁盘记录的会话')
+  .option('--json', '以 JSON 输出')
+  .action(agentList);
+
+agent
+  .command('read <sessionId>')
+  .description('查看会话状态与最新回复（只读，不污染上下文）')
+  .option('--json', '以 JSON 输出')
+  .option('--full', '完整输出，不截断')
+  .action(agentRead);
+
+agent
+  .command('send <sessionId> <text>')
+  .description('向 tmux 托管的会话注入指令（含空格请用引号包裹）')
+  .option('--no-enter', '注入后不自动回车')
+  .action(agentSend);
+
+agent
+  .command('takeover <sessionId>')
+  .description('接管非 tmux 会话（kill 原进程 + resume 进 tmux）')
+  .option('--force', '忽略 busy 保护，强制接管')
+  .option('--mode <mode>', '权限模式（默认按 agent 类型）')
+  .action(agentTakeover);
+
+agent
+  .command('run [prompt]')
+  .description('在 tmux 中启动一个可远控的新会话')
+  .option('-w, --cwd <dir>', '工作目录（默认当前目录）')
+  .option('--tool <tool>', 'agent 类型 (claude|qoder)', 'claude')
+  .option('--mode <mode>', '权限模式（默认按 agent 类型）')
+  .action(agentRun);
 
 program.parse(process.argv);

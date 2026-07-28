@@ -1,15 +1,20 @@
 # 🤖 cc-connect-router
 
-> 通过钉钉远程控制本地开发环境：**OpenCode 作为轻量路由层，Qoder CLI 作为真实执行层**。
+> 从手机（钉钉）监控并控制本机上正在运行的**多个** coding agent 会话（Claude Code / qodercli）：**读写分离、一对多、无解释型路由夹层**。
 
-在钉钉里发一句话，就能让本地的 Qoder CLI 帮你查任务、派活、看进度、跑代码。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 搭建，无需编写任何自定义后端代码 —— 全部通过配置 + skill + shell 脚本完成。
+在钉钉里发一句话，就能查看本机所有 agent 任务的状态、只读拉取结果、并把后续指令注入到指定的那个任务。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 做钉钉 ↔ 本地的消息传输，本机侧的发现与控制全部由 `cc-router agent` 命令完成。
 
 ---
 
 ## 🏗️ 架构
 
+**无解释型路由 Agent**：普通消息由 cc-connect 直接转发给绑定的目标 agent 会话——目标 agent（Claude Code / qodercli）本身就是 LLM，自己理解自然语言，不需要中间再夹一个"路由 agent"去翻译意图。跨会话的发现与控制由 `cc-router agent` 这一层**确定性命令**完成。
+
 ```
-钉钉 → cc-connect → OpenCode (路由) → Skill + 脚本 → Qoder CLI (执行)
+钉钉 ↔ cc-connect ↔ 目标 agent 会话（Claude Code / qodercli，直连，自己理解 NL）
+                         ▲
+                         │ 发现 / 只读 / 注入 / 接管 / 新建（确定性命令，无 LLM 夹层）
+                    cc-router agent  ──►  tmux 托管的会话（可远控，支撑一对多）
 ```
 
 ```
@@ -17,33 +22,29 @@
                    │  DingTalk Stream
                    ▼
         ┌──────────────────────┐
-        │      cc-connect       │   纯配置，无自定义代码
+        │      cc-connect       │   钉钉 ↔ 本地 消息传输
         └──────────────────────┘
-                   │  消息转发
+                   │  普通消息直连转发
                    ▼
-        ┌──────────────────────┐
-        │     OpenCode CLI      │   轻量路由层（skill 理解意图）
-        └──────────────────────┘
-                   │  skill 调用 shell 脚本
-                   ▼
-        ┌──────────────────────┐
-        │      Qoder CLI        │   真实执行层
-        └──────────────────────┘
-                   │  执行结果回传
-                   ▼
-     OpenCode ──► cc-connect ──► 钉钉
+        ┌──────────────────────┐        发现/只读/注入/接管
+        │   目标 agent 会话     │ ◄─────────────────────────┐
+        │ Claude Code/qodercli  │   （自己理解自然语言）      │
+        └──────────────────────┘                           │
+                   │ 运行于                        ┌──────────────────┐
+                   ▼                               │  cc-router agent  │
+             tmux 托管会话  ◄─────── 管理/一对多 ───│  控制面（CLI）    │
+                                                   └──────────────────┘
 ```
 
 用 Mermaid 表示：
 
 ```mermaid
-graph TB
-    A[钉钉用户消息] -->|DingTalk Stream| B[cc-connect 纯配置]
-    B -->|消息转发| C[OpenCode CLI 路由层]
-    C -->|skill 调用 shell 脚本| D[Qoder CLI 执行层]
-    D -->|执行结果回传| C
-    C --> B
-    B --> A
+graph LR
+    P[钉钉 / 手机] <-->|DingTalk Stream| CC[cc-connect 消息传输]
+    CC <-->|普通消息直连| A[目标 agent 会话<br/>Claude Code / qodercli<br/>自己理解 NL]
+    R[cc-router agent<br/>控制面 list/read/send/takeover/run] -->|发现·只读·注入·接管| A
+    A -.->|运行于| T[tmux 托管会话]
+    R -.->|管理·一对多| T
 ```
 
 ---
@@ -79,15 +80,14 @@ cc-router start
 
 ---
 
-## 🧩 Skill 安装（面向 Agent 用户）
+## 🧩 无需路由 Agent
 
-如果你使用支持 [skills.sh](https://skills.sh) 的 Agent，可以直接安装本仓库提供的 `qoder-router` skill：
+本项目**不需要**一个额外的"路由 Agent"来解释钉钉消息：
 
-```bash
-npx skills add huangtengxiao/connect/skill/qoder-router
-```
+- **普通消息**：cc-connect 直接转发给绑定的目标 agent 会话，由它（Claude Code / qodercli，本身即 LLM）自行理解并执行。
+- **跨会话控制**：用 `cc-router agent list/read/send/takeover/run` 这组**确定性命令**完成发现、只读、注入、接管、新建——没有意图识别的 LLM 夹层，也就没有二次推理的延迟、成本与出错面。
 
-这会把 `qoder-router` skill（含意图路由规则、shell 脚本、参考文档）安装到你的 Agent 中，让 Agent 具备识别钉钉消息意图并调用 Qoder CLI 的能力。
+> 早期的 `qoder-router` skill（依赖 OpenCode 路由层、单项目直调 Qoder CLI 的旧流程）仍保留在 `skill/qoder-router/` 作为历史参考，已被上述直连 + 控制面模型取代。
 
 ---
 
@@ -104,6 +104,42 @@ npx skills add huangtengxiao/connect/skill/qoder-router
 | `cc-router project remove <name> [--yes]` | 删除项目 |
 | `cc-router project list` | 列出所有项目 |
 | `cc-router start` | 使用当前配置启动 cc-connect |
+| `cc-router agent list [-a] [--json]` | 列出本机运行中的 Agent 会话（一对多看板数据源） |
+| `cc-router agent read <id> [--json] [--full]` | 只读查看会话状态与最新回复（不污染上下文） |
+| `cc-router agent send <id> "<text>"` | 向 tmux 托管的会话注入指令 |
+| `cc-router agent takeover <id> [--force]` | 接管非 tmux 会话（kill 原进程 + resume 进 tmux） |
+| `cc-router agent run ["<prompt>"] [-w dir]` | 在 tmux 中启动一个可远控的新会话 |
+
+---
+
+## 🎛️ Agent 会话控制（读写双平面）
+
+用一部手机监控并控制本机上**多个**正在运行的 Agent 会话（当前支持 Claude Code，qodercli 为其衍生品、后续接入）。核心是**读写分离**，避免手机上大量查询污染真实工作上下文：
+
+- **读平面（带外、零污染）**：`agent list` / `agent read` 直接读 Claude Code 落盘的运行态注册表（`~/.claude/sessions/<pid>.json`）与会话 transcript（`~/.claude/projects/<cwd>/<id>.jsonl`），**完全不碰 agent 进程**，手机上狂刷也不入任何上下文。
+- **写平面（带内、刻意）**：`agent send` 才会真正向会话注入指令。
+
+会话按**控制通道**分类：
+
+| 通道 | 含义 | 可注入？ |
+|------|------|----------|
+| `tmux` | 我们托管的（`agent run`/`takeover`）或外部 tmux 会话 | ✅ `agent send` 直接注入 |
+| `tty` | 裸终端交互会话 | 需先 `agent takeover` 接管进 tmux |
+| `ide` | IDE（VS Code 等）占用 / headless | 只读，勿动 |
+| `dead` | 进程已退出，仅剩磁盘记录 | `takeover` 直接 resume |
+
+典型流程：
+
+```bash
+cc-router agent list                         # 看有哪些会话、谁在忙谁空闲
+cc-router agent read a1b2c3d4                 # 任务跑完了？看看结果（只读）
+cc-router agent takeover a1b2c3d4             # 若是裸终端会话，先接管进 tmux
+cc-router agent send a1b2c3d4 "继续：改用方案 B"  # 继续派活
+cc-router agent run -w /path/to/proj "跑单元测试"  # 或全新起一个可远控会话
+```
+
+> 依赖 `tmux`（写平面）：`brew install tmux`。读平面（list/read）无需 tmux。
+
 
 ---
 
