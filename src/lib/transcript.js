@@ -194,6 +194,50 @@ function summarize(file) {
   return { lastAssistant, lastUser, lastTool, messageCount, lastTs };
 }
 
+/**
+ * 构造"最近上下文摘录"：从**最近一次压缩摘要**（Claude Code 的 isCompactSummary / compact_boundary）
+ * 开始，包含该摘要 + 其后的用户/助手消息；无压缩则回退到末尾若干消息。用于大会话的只读咨询（有损但廉价）。
+ * @param {string} file transcript 路径
+ * @param {object} [opts] { maxChars }
+ * @returns {{ text:string, fromCompaction:boolean }}
+ */
+function contextExcerpt(file, opts = {}) {
+  const max = opts.maxChars || 8000;
+  let lines;
+  try {
+    lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
+  } catch (e) {
+    return { text: '', fromCompaction: false };
+  }
+  // 从后往前找最近一次压缩点
+  let startIdx = 0;
+  let summaryText = '';
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    let o;
+    try { o = JSON.parse(lines[i]); } catch (e) { continue; }
+    if (o && o.isCompactSummary) { startIdx = i + 1; summaryText = textFromContent(o.message && o.message.content); break; }
+    if (o && o.type === 'system' && o.subtype === 'compact_boundary') { startIdx = i + 1; break; }
+  }
+  // 收集压缩点之后的用户/助手文本
+  const parts = [];
+  for (let i = startIdx; i < lines.length; i += 1) {
+    let o;
+    try { o = JSON.parse(lines[i]); } catch (e) { continue; }
+    if (o.type === 'user' && !o.isCompactSummary) {
+      const t = textFromContent(o.message && o.message.content);
+      if (t) parts.push(`用户: ${t.slice(0, 300)}`);
+    } else if (o.type === 'assistant') {
+      const t = textFromContent(o.message && o.message.content);
+      if (t) parts.push(`助手: ${t.slice(0, 500)}`);
+    }
+  }
+  const summaryBlock = summaryText ? `【最近一次压缩摘要】\n${summaryText.slice(0, 3500)}\n\n【此后的消息】\n` : '';
+  let tail = parts.join('\n');
+  const budget = Math.max(1000, max - summaryBlock.length);
+  if (tail.length > budget) tail = `…（更早略）\n${tail.slice(-budget)}`;
+  return { text: summaryBlock + tail, fromCompaction: !!summaryText || startIdx > 0 };
+}
+
 module.exports = {
   encodeCwd,
   resolveTranscript,
@@ -202,4 +246,5 @@ module.exports = {
   readEvents,
   textFromContent,
   summarize,
+  contextExcerpt,
 };

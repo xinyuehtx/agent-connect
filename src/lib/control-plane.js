@@ -2,13 +2,13 @@
 
 const fs = require('fs');
 const crypto = require('crypto');
-const { execFile, spawn } = require('child_process');
+const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 
 const registry = require('./registry');
 const tmux = require('./tmux');
 const proc = require('./proc');
-const { readEvents, textFromContent, summarize } = require('./transcript');
+const { readEvents, textFromContent, summarize, contextExcerpt } = require('./transcript');
 const { getAdapter, getAdapters } = require('./agents');
 const { NotFoundError, NotControllableError, ConflictError } = require('./errors');
 
@@ -233,34 +233,31 @@ class ControlPlane extends EventEmitter {
     if (!adapter.bin) {
       return { ok: false, error: `${s.tool} 是桌面应用，无 CLI，无法只读咨询（可用 read_reply 看最新回复）`, from };
     }
-    if (!adapter.readonlyMode) {
-      return { ok: false, error: `${s.tool} 无只读(plan)模式，无法只读咨询；建议接管后再问`, from };
+    const roArgs = adapter.readonlyArgs || [];
+    if (!roArgs.length) {
+      return { ok: false, error: `${s.tool} 无只读模式，无法只读咨询；建议接管后再问`, from };
     }
-    // 体量守卫：过大的会话 fork 会很慢/超时，直接快速失败并引导接管，避免阻塞回复
-    const file = adapter.transcriptPath(s.cwd, s.sessionId);
-    try {
-      if (file) {
-        const sz = fs.statSync(file).size;
-        if (sz > (opts.maxBytes || 1800000)) {
-          return {
-            ok: false,
-            tooLarge: true,
-            error: `会话过大（${(sz / 1e6).toFixed(1)}MB），只读 fork 会超时；建议接管后直接问，或用 read_reply 看最近内容`,
-            from,
-          };
-        }
-      }
-    } catch (e) { /* ignore */ }
 
-    const args = [
-      '-p', question,
-      '--resume', s.sessionId,
-      '--fork-session',
-      '--permission-mode', adapter.readonlyMode, // 只读：只规划/回答，不编辑
-      '--output-format', 'json',
-    ];
+    // 选择模式：小会话 fork 全量上下文（准确）；大会话喂"最近摘录"给全新 agent（快、有损）
+    const file = adapter.transcriptPath(s.cwd, s.sessionId);
+    let big = false;
+    try { big = file && fs.statSync(file).size > (opts.maxBytes || 1800000); } catch (e) { /* ignore */ }
+
+    let args;
+    let mode;
+    if (!big) {
+      // full-fork：resume + fork（不动原会话）+ 只读参数
+      mode = 'full';
+      args = ['-p', question, '--resume', s.sessionId, '--fork-session', ...roArgs, '--output-format', 'json'];
+    } else {
+      // bounded-excerpt：从最近一次压缩摘要开始的节选 → 喂给全新 agent，避免重放全量历史
+      mode = 'excerpt';
+      const { text: excerpt } = contextExcerpt(file, { maxChars: 8000 });
+      const prompt = `以下是会话「${from.name}」的最近上下文（从最近一次压缩摘要开始，可能有损、不完整）：\n\n${excerpt}\n\n请仅据此回答（信息不足就说明）：${question}`;
+      args = ['-p', prompt, ...roArgs, '--output-format', 'json']; // 全新会话，无 --resume
+    }
+
     const cwd = s.cwd || process.cwd();
-    // 稳健 PATH：daemon 可能非登录 shell，补上常见 claude 安装路径
     const env = {
       ...process.env,
       PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.HOME}/.nvm/versions/node/v24.15.0/bin:${process.env.PATH || ''}`,
@@ -270,21 +267,20 @@ class ControlPlane extends EventEmitter {
       let out = '';
       let err = '';
       let done = false;
-      // stdio: 忽略 stdin（否则 headless claude 会等 3s stdin）
       const child = spawn(adapter.bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
       const finish = (r) => { if (!done) { done = true; clearTimeout(timer); resolve(r); } };
       const timer = setTimeout(() => {
         try { child.kill('SIGKILL'); } catch (e) { /* ignore */ }
-        finish({ ok: false, error: `只读咨询超时（${Math.round(timeoutMs / 1000)}s）——会话可能较大，建议接管后再问`, from });
+        finish({ ok: false, error: `只读咨询超时（${Math.round(timeoutMs / 1000)}s），建议接管后再问`, from, mode });
       }, timeoutMs);
       child.stdout.on('data', (d) => { out += d; });
       child.stderr.on('data', (d) => { err += d; });
-      child.on('error', (e) => finish({ ok: false, error: (e.message || '').slice(0, 160), from }));
+      child.on('error', (e) => finish({ ok: false, error: (e.message || '').slice(0, 160), from, mode }));
       child.on('close', (code) => {
         if (code !== 0 && !out) {
-          finish({ ok: false, error: (err || `exit ${code}`).trim().slice(0, 200), from });
+          finish({ ok: false, error: (err || `exit ${code}`).trim().slice(0, 200), from, mode });
         } else {
-          finish({ ok: true, answer: extractResult(out), from });
+          finish({ ok: true, answer: extractResult(out), from, mode });
         }
       });
     });

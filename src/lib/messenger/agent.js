@@ -29,7 +29,7 @@ const SYSTEM_PROMPT = [
   '',
   '你维护一个「当前会话」指针（像 shell 的 cwd）。可用意图：',
   '1) 切换当前会话：switch_current。 2) 列出全部任务：list_sessions。',
-  '3) **只读咨询：consult_session**——凡是"问它/为什么/怎么改/总结这次改动/解释/评估"这类需要**会话上下文**才能答的问题，一律 fork 该会话只读提问，把 worker 的回答带回来；**绝不要用你自己的记忆/猜测代替它作答**。',
+  '3) **只读咨询：consult_session**——凡是"问它/为什么/怎么改/总结这次改动/解释/评估"这类需要**会话上下文**才能答的问题，一律 fork 该会话只读提问，把 worker 的回答带回来；**绝不要用你自己的记忆/猜测代替它作答**。（大会话会自动改用"最近记录节选"作答，工具返回 mode=excerpt 时请注明"基于最近记录、可能有损"。）',
   '4) 读回复：read_reply（看它最新说了什么/进度）。 5) 转发消息：propose_forward（把指令交给 worker 执行）。',
   '6) 接管：propose_takeover； 7) 退出关闭：propose_exit； 8) 新建：propose_run； 截图：snapshot_session。',
   '',
@@ -149,10 +149,10 @@ function buildTools({
         const v = await validateTarget(sessionId);
         if (v.note) return v.note;
         const r = await plane.consult(v.id, question);
-        if (!r.ok) return { ok: false, note: `只读咨询失败: ${r.error || '未知'}（可尝试接管后再问）` };
+        if (!r.ok) return { ok: false, note: `只读咨询失败: ${r.error || '未知'}（可接管后再问）` };
         return {
           ok: true,
-          mode: 'read-only-fork',
+          mode: r.mode === 'excerpt' ? 'read-only-excerpt(lossy)' : 'read-only-fork',
           from: `${r.from.name}·${r.from.tool}`,
           answer: r.answer,
         };

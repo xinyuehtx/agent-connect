@@ -408,6 +408,35 @@ test('extractResult: array result event / assistant fallback / single object', (
   assert.strictEqual(extractResult('not json'), 'not json');
 });
 
+test('contextExcerpt starts from latest compaction summary (excludes pre-compaction)', () => {
+  const { contextExcerpt } = require('../src/lib/transcript');
+  const f = tmpFile('compact.jsonl');
+  fs.writeFileSync(f, [
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'PRE_COMPACT old message' } }),
+    JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: 'PRE_COMPACT old reply' } }),
+    JSON.stringify({ type: 'user', isCompactSummary: true, message: { role: 'user', content: 'SUMMARY did A B C' } }),
+    JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: 'POST reply after compaction' } }),
+  ].join('\n'));
+  const r = contextExcerpt(f);
+  assert.strictEqual(r.fromCompaction, true);
+  assert.match(r.text, /最近一次压缩摘要/);
+  assert.match(r.text, /SUMMARY did A B C/);
+  assert.match(r.text, /POST reply after compaction/);
+  assert.ok(!r.text.includes('PRE_COMPACT'), 'pre-compaction messages excluded');
+});
+
+test('contextExcerpt falls back to recent tail when no compaction', () => {
+  const { contextExcerpt } = require('../src/lib/transcript');
+  const f = tmpFile('nocompact.jsonl');
+  fs.writeFileSync(f, [
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'hello there' } }),
+    JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: 'hi back' } }),
+  ].join('\n'));
+  const r = contextExcerpt(f);
+  assert.strictEqual(r.fromCompaction, false);
+  assert.match(r.text, /hello there/);
+});
+
 test('qwen adapter: registered, monitor-only (no CLI bin), parses cwd from transcript', () => {
   const { getAdapter } = require('../src/lib/agents');
   const qwen = getAdapter('qwen');

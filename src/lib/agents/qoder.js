@@ -127,6 +127,7 @@ module.exports = {
   tool: 'qoder',
   bin: 'qodercli',
   defaultMode: 'bypass_permissions', // qodercli 用下划线（choices: default/accept_edits/bypass_permissions/dont_ask/auto）
+  readonlyArgs: ['--tools', ''], // 只读咨询：禁用所有内建工具（无 plan 模式，用 --tools "" 保证不改文件）
   QODER_DIR,
   PROJECTS_DIR,
   encodeCwd,
