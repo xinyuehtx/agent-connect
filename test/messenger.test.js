@@ -357,6 +357,25 @@ test('notifier: disabled does not subscribe', async () => {
   assert.strictEqual(sent.length, 0);
 });
 
+test('notifier: monitor-only GUI agent (qwen) is skipped by default', async () => {
+  const { sent, ev } = mkNotifier();
+  ev('q', 'busy', { tool: 'qwen' }); // seed
+  ev('q', 'idle', { tool: 'qwen' }); // busy→idle but monitor-only → skip
+  ev('c', 'busy', { tool: 'claude' }); // seed
+  ev('c', 'idle', { tool: 'claude' }); // real agent → notify
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(sent.length, 1);
+  assert.match(sent[0].message, /任务完成/);
+});
+
+test('notifier: monitor_only=true re-enables GUI agent notifications', async () => {
+  const { sent, ev } = mkNotifier({ monitor_only: true });
+  ev('q', 'busy', { tool: 'qwen' }); // seed
+  ev('q', 'idle', { tool: 'qwen' }); // now allowed
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(sent.length, 1);
+});
+
 test('historyToEvents maps user/assistant + tool calls', () => {
   const events = historyToEvents([
     { role: 'user', content: '你好' },

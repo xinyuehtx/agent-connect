@@ -189,6 +189,10 @@ The messenger replies in a configurable language (default **Chinese**; `messenge
 
 To avoid drowning in old tasks, completed sessions are filtered by age: `[filter] window_days` (1 / 3 / 7, or `0` = all). **Running / waiting sessions are always shown**; only idle/exited ones older than the window are hidden. The web board has a dropdown that persists this, and the **same setting applies to IM `list_sessions`**, so the messenger won't surface stale tasks either.
 
+## 🔔 Proactive notifications
+
+The daemon pushes an IM message on only two transitions — **needs confirmation/input** (a session enters `waiting`) and **task done** (`busy → idle`) — deduped per session with a cooldown. **Monitor-only GUI agents (qwen / qoderwork) are excluded by default**: you drive those in their own app and can't act on them remotely, so their completions would just be noise. Set `notify.monitor_only = true` to include them. Config: `[notify]` `enabled` / `on_needs_confirm` / `on_task_done` / `cooldown_ms` / `monitor_only` / `scope`.
+
 ## 🖌️ Streaming AI card (DingTalk, optional)
 
 For a typewriter-style streaming reply, create an **AI card template** on the DingTalk Open Platform and set its id — `card_template_id` (+ optional `card_template_key`, `card_throttle_ms`) under the DingTalk platform options, or via the web **Settings → IM connector → Streaming AI card**. If unset, replies fall back to normal messages (fully functional, just not streamed).

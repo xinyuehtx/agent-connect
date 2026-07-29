@@ -34,6 +34,8 @@ const DEFAULTS = {
     on_needs_confirm: true,
     on_task_done: true,
     cooldown_ms: 30000,
+    // 纯监控型 GUI 应用(qwen/qoderwork 等无 CLI 适配器)是否也推主动通知。默认 false=屏蔽(仅噪音)。
+    monitor_only: false,
   },
   filter: {
     // 已完成/不活跃任务的时效过滤（天）：仅隐藏空闲/退出且超过该时长的会话；运行中/待输入始终显示。0 = 不过滤。

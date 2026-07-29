@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendViaCcConnect } = require('../im/deliver');
+const { getAdapter } = require('../agents');
 
 /**
  * 会话状态监听器：仅在两种情况下向 IM 主动推送消息——
@@ -62,6 +63,14 @@ class SessionNotifier {
     }
     if (this.cfg.scope === 'controllable' && !s.controllable) {
       return;
+    }
+    // 纯监控型 GUI 应用（无 CLI，不可控制/咨询，如 qwen/qoderwork）默认不推主动通知——
+    // 用户在其 App 内直接操作，完成状态本就可见，远程通知无可操作价值、且易被记忆会话刷屏。
+    if (this.cfg.monitor_only !== true) {
+      const ad = s.tool && getAdapter(s.tool);
+      if (ad && ad.bin === '') {
+        return;
+      }
     }
     if (status === 'waiting' && this.cfg.on_needs_confirm !== false) {
       this._notify('needs_confirm', s);

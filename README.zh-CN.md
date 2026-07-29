@@ -189,6 +189,10 @@ cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、D
 
 为避免过多旧任务透出，已完成会话按时效过滤：`[filter] window_days`（1 / 3 / 7，或 `0` = 全部）。**运行中/待输入的会话始终显示**，只有空闲/已退出且超过时长的才隐藏。Web 看板有下拉可切换并持久化，**同一设置对 IM 的 `list_sessions` 同样生效**，信使也不会把陈旧任务列出来。
 
+## 🔔 主动通知
+
+守护进程只在两种转换时主动推 IM 消息 —— **需要确认/输入**（会话进入 `waiting`）与 **任务完成**（`busy → idle`），并按会话冷却去重。**纯监控型 GUI 应用（qwen / qoderwork）默认屏蔽**：这类会话你在其 App 内直接操作、也无法远程处理，推送只会是噪音；需要时设 `notify.monitor_only = true` 打开。配置：`[notify]` `enabled` / `on_needs_confirm` / `on_task_done` / `cooldown_ms` / `monitor_only` / `scope`。
+
 ## 🖌️ 流式 AI 卡片（钉钉，可选）
 
 想要打字机式流式回复：在钉钉开放平台创建 **AI 卡片模板**，把它的 id 填到钉钉平台选项的 `card_template_id`（另可选 `card_template_key`、`card_throttle_ms`），或在 Web **设置 → IM 连接器 → 流式 AI 卡片** 里填。不填则回退为普通消息（功能不受影响，只是非流式）。
