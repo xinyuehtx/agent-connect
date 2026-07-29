@@ -408,6 +408,20 @@ test('extractResult: array result event / assistant fallback / single object', (
   assert.strictEqual(extractResult('not json'), 'not json');
 });
 
+test('qwen adapter: registered, monitor-only (no CLI bin), parses cwd from transcript', () => {
+  const { getAdapter } = require('../src/lib/agents');
+  const qwen = getAdapter('qwen');
+  assert.ok(qwen, 'qwen adapter registered');
+  assert.strictEqual(qwen.bin, '', 'qwen has no CLI → monitor-only');
+  // cwdFromTranscript reads cwd / workspace-directories from the head
+  const f = tmpFile('qwen.jsonl');
+  fs.writeFileSync(f, [
+    JSON.stringify({ type: 'workspace-directories', directories: ['/Users/x/proj'] }),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } }),
+  ].join('\n'));
+  assert.strictEqual(qwen.cwdFromTranscript(f), '/Users/x/proj');
+});
+
 test('consult_session: read-only fork returns attributed answer; stale gate applies', async () => {
   const { buildTools } = require('../src/lib/messenger/agent');
   const plane = {

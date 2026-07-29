@@ -229,6 +229,11 @@ class ControlPlane extends EventEmitter {
     if (!adapter) {
       throw new NotFoundError(`未知 agent 类型: ${s.tool}`);
     }
+    const from = { name: s.name || String(s.sessionId).slice(0, 8), tool: s.tool, short: String(s.sessionId).slice(0, 8) };
+    if (!adapter.bin) {
+      // 无 CLI 的 agent（如 QwenWorkCN 桌面应用）不支持 fork 只读咨询
+      return { ok: false, error: `${s.tool} 是桌面应用，无 CLI，无法只读咨询（可用 read_reply 看最新回复）`, from };
+    }
     const args = [
       '-p', question,
       '--resume', s.sessionId,
@@ -237,7 +242,6 @@ class ControlPlane extends EventEmitter {
       '--output-format', 'json',
     ];
     const cwd = s.cwd || process.cwd();
-    const from = { name: s.name || String(s.sessionId).slice(0, 8), tool: s.tool, short: String(s.sessionId).slice(0, 8) };
     return new Promise((resolve) => {
       execFile(adapter.bin, args, {
         cwd, timeout: opts.timeoutMs || 120000, maxBuffer: 16 * 1024 * 1024, env: process.env,
