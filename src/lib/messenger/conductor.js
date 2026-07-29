@@ -26,6 +26,9 @@ class AgentConductor {
     this.confirmTtlMs = deps.confirmTtlMs || 300000;
     this.filterWindowDays = deps.filterWindowDays || null;
     this.onExecute = deps.onExecute;
+    // 每个 conversationKey 一条串行链：同一会话的多条指令严格排队，
+    // 杜绝共享历史/待确认队列的并发读改写竞态，并保证回复按到达顺序产出（线程不混乱）。
+    this._chain = new Map();
   }
 
   _matches(words, text) {
@@ -85,12 +88,26 @@ class AgentConductor {
   }
 
   /**
-   * 处理一轮输入。
+   * 处理一轮输入（按 conversationKey 串行，前一轮结束后才开始下一轮）。
    * @param {string} conversationKey
    * @param {string} text
    * @returns {Promise<object>} ConductorResult
    */
-  async handle(conversationKey, text, ctx) {
+  handle(conversationKey, text, ctx) {
+    const prev = this._chain.get(conversationKey) || Promise.resolve();
+    const run = prev.catch(() => {}).then(() => this._handle(conversationKey, text, ctx));
+    // 链上只保留"完成信号"（吞掉异常避免污染后续轮次）；真实结果/异常照常返回给本次调用方。
+    this._chain.set(conversationKey, run.catch(() => {}));
+    return run;
+  }
+
+  /**
+   * 处理一轮输入（真正逻辑，非并发安全，须经 handle 串行调用）。
+   * @param {string} conversationKey
+   * @param {string} text
+   * @returns {Promise<object>} ConductorResult
+   */
+  async _handle(conversationKey, text, ctx) {
     // 实时求值：Web 配置页改动确认词/超时后立即生效，无需重启
     const confirmWords = resolve(this.confirmWords);
     const cancelWords = resolve(this.cancelWords);

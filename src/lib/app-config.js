@@ -23,6 +23,8 @@ const DEFAULTS = {
     confirm_words: ['确认', '确定', 'yes', 'y', 'ok'],
     cancel_words: ['取消', 'no', 'n'],
     confirm_ttl_ms: 300000,
+    // 回复时在正文前引用触发指令（内容层「引用回复」，避免多指令线程混乱）。钉钉无原生引用回复。
+    quote_reply: true,
   },
   notify: {
     enabled: true,

@@ -484,3 +484,109 @@ test('consult_session: read-only fork returns attributed answer; stale gate appl
   const stale = await tools.consult_session.execute({ question: 'x' });
   assert.strictEqual(stale.stale, true);
 });
+
+/* ---------------- 引用回复（内容层线程绑定） ---------------- */
+
+const { quoteHeader, withQuote } = require('../src/lib/im/quote');
+
+test('quoteHeader: single-line blockquote of the command', () => {
+  assert.strictEqual(quoteHeader('列出会话'), '> 🗨️ 你：列出会话\n\n');
+});
+
+test('quoteHeader: collapses newlines/whitespace to one line', () => {
+  assert.strictEqual(quoteHeader('切到  c233\n再跑测试'), '> 🗨️ 你：切到 c233 再跑测试\n\n');
+});
+
+test('quoteHeader: truncates long commands with ellipsis', () => {
+  const long = 'x'.repeat(200);
+  const h = quoteHeader(long, { max: 20 });
+  assert.ok(h.startsWith('> 🗨️ 你：'));
+  assert.ok(h.includes('…'));
+  // 20 字上限：19 个 x + 省略号
+  assert.strictEqual(h, `> 🗨️ 你：${'x'.repeat(19)}…\n\n`);
+});
+
+test('quoteHeader: empty/whitespace command → no header', () => {
+  assert.strictEqual(quoteHeader(''), '');
+  assert.strictEqual(quoteHeader('   \n  '), '');
+  assert.strictEqual(quoteHeader(null), '');
+});
+
+test('withQuote: prepends header to reply body', () => {
+  assert.strictEqual(withQuote('列出会话', '3 个会话'), '> 🗨️ 你：列出会话\n\n3 个会话');
+});
+
+test('withQuote: disabled → body unchanged', () => {
+  assert.strictEqual(withQuote('列出会话', '3 个会话', false), '3 个会话');
+});
+
+test('withQuote: blank body → unchanged (no lone quote line)', () => {
+  assert.strictEqual(withQuote('列出会话', ''), '');
+  assert.strictEqual(withQuote('列出会话', '   '), '   ');
+});
+
+test('gate default: quote_reply is on', () => {
+  const g = gateFor({}, 'dingtalk');
+  assert.strictEqual(g.quote_reply, true);
+});
+
+/* ---------------- conductor 串行化（同一会话不并发） ---------------- */
+
+test('conductor.handle: serializes turns per conversationKey (no overlap)', async () => {
+  let active = 0;
+  let maxActive = 0;
+  const order = [];
+  const messenger = {
+    run: async (key, text) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 15));
+      active -= 1;
+      order.push(text);
+      return `ok:${text}`;
+    },
+  };
+  const pending = new FilePendingStore(tmpFile('pc-ser.json'));
+  const cond = new AgentConductor({ messenger, plane: {}, pending });
+  // 同一 key 同时发起两轮：必须串行（maxActive===1）且按到达顺序完成
+  const [r1, r2] = await Promise.all([
+    cond.handle('m', 'A'),
+    cond.handle('m', 'B'),
+  ]);
+  assert.strictEqual(maxActive, 1, '同一会话不得并发执行');
+  assert.deepStrictEqual(order, ['A', 'B'], '须按到达顺序处理');
+  assert.strictEqual(r1.text, 'ok:A');
+  assert.strictEqual(r2.text, 'ok:B');
+});
+
+test('conductor.handle: a failed turn does not break the next one', async () => {
+  let n = 0;
+  const messenger = {
+    run: async () => { n += 1; if (n === 1) throw new Error('boom'); return 'second-ok'; },
+  };
+  const pending = new FilePendingStore(tmpFile('pc-err.json'));
+  const cond = new AgentConductor({ messenger, plane: {}, pending });
+  const p1 = cond.handle('m', 'first');
+  const p2 = cond.handle('m', 'second');
+  await assert.rejects(p1, /boom/);
+  const r2 = await p2;
+  assert.strictEqual(r2.text, 'second-ok');
+});
+
+test('conductor.handle: different keys run concurrently', async () => {
+  let active = 0;
+  let maxActive = 0;
+  const messenger = {
+    run: async (key, text) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 15));
+      active -= 1;
+      return text;
+    },
+  };
+  const pending = new FilePendingStore(tmpFile('pc-multi.json'));
+  const cond = new AgentConductor({ messenger, plane: {}, pending });
+  await Promise.all([cond.handle('a', 'x'), cond.handle('b', 'y')]);
+  assert.strictEqual(maxActive, 2, '不同会话应可并发');
+});

@@ -155,6 +155,10 @@
         <span class="en">🔎 <b>Consult strategy</b>: small sessions use <b>full-fork</b> (`--resume --fork-session`, full context, accurate); large sessions use <b>bounded-excerpt</b> — a fresh agent is fed an excerpt <b>starting from the latest compaction summary</b> (avoids replaying a huge transcript; a 14 MB session went 90 s+ timeout → ~12 s, answer labeled lossy). Read-only per agent: Claude `--permission-mode plan`, qoder `--tools ""` (stronger than a permission mode; `--yolo` is only for control, never consult).</span>
       </div>
       <div class="note" style="margin-top:14px">
+        <span class="zh">🧵 <b>引用回复</b>：每条回复前都引用触发它的指令（`&gt; 🗨️ 你：列出会话`），多指令在途也不混线；钉钉经 cc-connect 无原生引用回复，故在内容层实现，跨平台一致。同一会话按串行处理，杜绝共享上下文竞态。开关 `im.platforms.&lt;平台&gt;.quote_reply`（默认开）。</span>
+        <span class="en">🧵 <b>Quoted replies</b>: every reply is prefixed with the command that triggered it (`&gt; 🗨️ 你：list sessions`), so overlapping commands never cross wires. DingTalk has no native quote-reply via cc-connect, so it's done in the reply content — consistent across platforms. Turns are serialized per conversation to avoid shared-context races. Toggle `im.platforms.&lt;name&gt;.quote_reply` (on by default).</span>
+      </div>
+      <div class="note" style="margin-top:14px">
         <pre style="margin:0;white-space:pre-wrap;font:13px/1.6 ui-monospace,monospace;color:var(--muted)"><span class="zh">你 ▸ 切到 c233caaf
 🧭 信使 ▸ 📍 已切到 agentmon（c233caaf）
 你 ▸ 它最近完成了什么？            # 咨询 → 只读 fork

@@ -177,6 +177,10 @@ The messenger, read/write planes, and confirm gate are identical across platform
 
 When a sender isn't in `allowed_sender_ids`, the bot **replies with an explicit “not authorized” message** (instead of silence), telling you which ID to add. Empty allowlist = allow all. The sender ID is whatever the platform reports (e.g. DingTalk `senderStaffId`).
 
+## 🧵 Threaded replies (command quoting)
+
+Every reply to a command is prefixed with a compact quote of the command that triggered it (`> 🗨️ 你：list sessions`), so you always know which message a reply answers — even when several commands are in flight and answers arrive out of order. DingTalk has **no native quote-reply through cc-connect** (`reply_to_trigger` is Feishu-only), so this is done in the reply content and works on every platform. Turns are also **serialized per conversation**, so overlapping commands can't race the shared messenger context or arrive out of order. Toggle with `im.platforms.<name>.quote_reply` (default `true`).
+
 ## ⏳ Recency filter (web + IM)
 
 To avoid drowning in old tasks, completed sessions are filtered by age: `[filter] window_days` (1 / 3 / 7, or `0` = all). **Running / waiting sessions are always shown**; only idle/exited ones older than the window are hidden. The web board has a dropdown that persists this, and the **same setting applies to IM `list_sessions`**, so the messenger won't surface stale tasks either.

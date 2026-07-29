@@ -71,7 +71,7 @@ async function serve(opts = {}) {
 
   // 配置 API（Web 配置页用）
   const MSG_FIELDS = ['provider', 'model', 'api_key', 'base_url', 'max_steps', 'conversation_key', 'auth_style', 'chrome_path'];
-  const GATE_FIELDS = ['enabled', 'command_prefix', 'allowed_sender_ids', 'confirm_words', 'cancel_words', 'confirm_ttl_ms'];
+  const GATE_FIELDS = ['enabled', 'command_prefix', 'allowed_sender_ids', 'confirm_words', 'cancel_words', 'confirm_ttl_ms', 'quote_reply'];
   // cc-connect 钉钉平台的凭证/流式卡片选项（写入 projects[].platforms[dingtalk].options）
   const DT_OPT_FIELDS = ['card_template_id', 'card_template_key', 'card_throttle_ms'];
   const config = {
