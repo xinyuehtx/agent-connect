@@ -306,6 +306,8 @@ async function openSettings() {
   $('im_client_secret').placeholder = im.client_secret ? '已设置' : '未设置';
   $('im_enabled').checked = !!im.enabled; $('im_prefix').value = im.command_prefix || '';
   $('im_allow').value = (im.allowed_sender_ids || []).join(', ');
+  $('im_quote').checked = im.quote_reply !== false;
+  $('im_reaction').value = im.reaction_emoji || ''; $('im_done').value = im.done_emoji || '';
 }
 async function saveLlm() {
   const body = { provider: $('llm_provider').value, model: $('llm_model').value.trim(), base_url: $('llm_base_url').value.trim(), auth_style: $('llm_auth').value.trim() };
@@ -313,7 +315,15 @@ async function saveLlm() {
   toast((await api('/api/config/llm', { method: 'POST', body: JSON.stringify(body) })).ok ? 'LLM 已保存' : '保存失败');
 }
 async function saveIm() {
-  const body = { client_id: $('im_client_id').value.trim(), enabled: $('im_enabled').checked, command_prefix: $('im_prefix').value.trim(), allowed_sender_ids: $('im_allow').value.split(',').map((s) => s.trim()).filter(Boolean) };
+  const body = {
+    client_id: $('im_client_id').value.trim(),
+    enabled: $('im_enabled').checked,
+    command_prefix: $('im_prefix').value.trim(),
+    allowed_sender_ids: $('im_allow').value.split(',').map((s) => s.trim()).filter(Boolean),
+    quote_reply: $('im_quote').checked,
+    reaction_emoji: $('im_reaction').value.trim(),
+    done_emoji: $('im_done').value.trim(),
+  };
   const sec = $('im_client_secret').value.trim(); if (sec) body.client_secret = sec;
   toast((await api('/api/config/im', { method: 'POST', body: JSON.stringify(body) })).ok ? 'IM 已保存' : '保存失败');
 }

@@ -74,6 +74,8 @@ async function serve(opts = {}) {
   const GATE_FIELDS = ['enabled', 'command_prefix', 'allowed_sender_ids', 'confirm_words', 'cancel_words', 'confirm_ttl_ms', 'quote_reply'];
   // cc-connect 钉钉平台的凭证/流式卡片选项（写入 projects[].platforms[dingtalk].options）
   const DT_OPT_FIELDS = ['card_template_id', 'card_template_key', 'card_throttle_ms'];
+  // 表情/状态指示选项：空串 = 删除键回退 cc-connect 默认（reaction_emoji 默认 🤔Thinking、done_emoji 默认 none）
+  const DT_EMOJI_FIELDS = ['reaction_emoji', 'done_emoji'];
   const config = {
     getMessenger: () => ({ ...loadAppConfig().messenger }),
     setMessenger: (patch) => {
@@ -98,6 +100,8 @@ async function serve(opts = {}) {
         card_template_id: dt.card_template_id || '',
         card_template_key: dt.card_template_key || '',
         card_throttle_ms: dt.card_throttle_ms || '',
+        reaction_emoji: dt.reaction_emoji || '',
+        done_emoji: dt.done_emoji || '',
       };
     },
     setIm: (patch) => {
@@ -114,6 +118,12 @@ async function serve(opts = {}) {
         if (patch.client_secret) dt.client_secret = patch.client_secret;
         for (const k of DT_OPT_FIELDS) {
           if (patch[k] !== undefined && patch[k] !== '') dt[k] = patch[k];
+        }
+        // 表情字段：空串 = 删除键（回退 cc-connect 默认），"none" = 显式禁用
+        for (const k of DT_EMOJI_FIELDS) {
+          if (patch[k] !== undefined) {
+            if (patch[k] === '') delete dt[k]; else dt[k] = patch[k];
+          }
         }
       }
       saveConfig(raw);

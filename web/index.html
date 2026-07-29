@@ -130,6 +130,10 @@
         <label><input type="checkbox" id="im_enabled"> 启用</label>
         <label>命令前缀 <span class="hint">(留空=处理所有)</span></label><input id="im_prefix" placeholder="/ai">
         <label>白名单 senderId <span class="hint">(逗号分隔,留空=允许所有)</span></label><input id="im_allow" placeholder="uid1, uid2">
+        <label><input type="checkbox" id="im_quote"> 引用回复 <span class="hint">(回复前引用触发指令,线程不混乱)</span></label>
+        <div class="section-label">表情状态 (cc-connect 原生, 改后需重启 cc-connect)</div>
+        <label>收到时表情 <span class="hint">(默认 🤔Thinking; 填 none 禁用; 留空=默认)</span></label><input id="im_reaction" placeholder="🤔Thinking">
+        <label>完成时表情 <span class="hint">(默认 none; 如 🥳Done; 留空=默认)</span></label><input id="im_done" placeholder="none">
         <div class="modal__row"><button class="btn" id="imSave">保存</button></div>
       </div>
     </div>
