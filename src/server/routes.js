@@ -123,7 +123,13 @@ function registerRoutes(app, deps) {
     });
 
   // ---- 会话（读平面 + 显式写）----
-  app.get('/api/sessions', (req, reply) => wrap(reply, () => plane.listSessions({ all: !!(req.query && req.query.all) })));
+  app.get('/api/sessions', (req, reply) => {
+    const q = req.query || {};
+    const windowDays = q.windowDays !== undefined
+      ? Number(q.windowDays)
+      : (config.getFilter ? config.getFilter().window_days : 0);
+    return wrap(reply, () => plane.listSessions({ all: !!q.all, windowDays }));
+  });
   app.get('/api/sessions/:id', (req, reply) => wrap(reply, () => plane.getSession(req.params.id)));
   app.get('/api/sessions/:id/messages', (req, reply) => {
     const q = req.query || {};
@@ -178,6 +184,13 @@ function registerRoutes(app, deps) {
   app.get('/api/config/im', (_req, reply) => wrap(reply, async () => config.getIm()));
   app.post('/api/config/im', (req, reply) => wrap(reply, async () => {
     config.setIm(req.body || {});
+    return { ok: true };
+  }));
+
+  // ---- 配置页：时效过滤（Web 与 IM 共用）----
+  app.get('/api/config/filter', (_req, reply) => wrap(reply, async () => (config.getFilter ? config.getFilter() : { window_days: 0 })));
+  app.post('/api/config/filter', (req, reply) => wrap(reply, async () => {
+    if (config.setFilter) config.setFilter(req.body || {});
     return { ok: true };
   }));
 

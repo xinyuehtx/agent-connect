@@ -9,6 +9,7 @@ const state = {
   mKeys: new Set(),
   agentEnabled: false,
   mTimer: null,
+  windowDays: 3,
 };
 
 const STATUS = {
@@ -42,9 +43,24 @@ async function doLogin() {
 function boot() {
   $('login').style.display = 'none';
   $('app').classList.add('is-ready');
+  loadFilter();
   refreshSessions();
   connectStream();
   setView('board');
+}
+
+async function loadFilter() {
+  const r = await api('/api/config/filter');
+  if (!r.ok) return;
+  const j = await r.json().catch(() => ({}));
+  state.windowDays = Number(j.window_days || 0);
+  $('filterWindow').value = String(state.windowDays);
+}
+// 时效过滤：运行中/待输入始终显示；其余仅保留最近 windowDays 内的
+function withinWindow(s) {
+  if (!state.windowDays) return true;
+  if (s.status === 'busy' || s.status === 'waiting') return true;
+  return s.updatedAt && s.updatedAt >= Date.now() - state.windowDays * 86400000;
 }
 
 /* ---------- view switching ---------- */
@@ -68,7 +84,7 @@ async function refreshSessions() {
   if (state.view === 'board') renderBoard();
 }
 function sortedSessions() {
-  return [...state.sessions.values()].sort((a, b) => {
+  return [...state.sessions.values()].filter(withinWindow).sort((a, b) => {
     const r = st(a).rank - st(b).rank;
     return r !== 0 ? r : (b.updatedAt || 0) - (a.updatedAt || 0);
   });
@@ -313,6 +329,12 @@ $('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin()
 for (const t of document.querySelectorAll('#viewTabs .tab')) t.onclick = () => setView(t.dataset.view);
 $('newBtn').onclick = newSession;
 $('refreshBtn').onclick = refreshSessions;
+$('filterWindow').onchange = async (e) => {
+  state.windowDays = Number(e.target.value);
+  await api('/api/config/filter', { method: 'POST', body: JSON.stringify({ window_days: state.windowDays }) });
+  toast(`时效过滤：${state.windowDays ? `近 ${state.windowDays} 天` : '全部'}（同步生效于钉钉）`);
+  renderBoard();
+};
 $('detailBack').onclick = () => setView('board');
 $('detailSend').onclick = detailSend;
 $('detailInput').addEventListener('input', (e) => autoGrow(e.target));

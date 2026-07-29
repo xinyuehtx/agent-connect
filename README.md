@@ -74,14 +74,67 @@ DingTalk credentials come from an **internal app / bot** on the [DingTalk Open P
 
 ---
 
-## 🧠 Messenger agent (dispatch + safety gate)
+## 🧠 Messenger agent (manager router)
 
-The messenger is **not** a re-router — it never re-interprets or executes your task. It does three things: decide **read vs. write**, locate **which session**, pick **which verb**, then call control-plane tools. The task still runs in the worker agent.
+The messenger is a **manager router**, not a worker. It only does *intent recognition + routing*; the real work runs in the target worker session. It keeps a **current-session pointer (like a shell `cwd`)** so follow-ups don't need to name a session.
 
-- **Read tools** (`list_sessions` / `read_session` / `get_status`) — always available, read on-disk files only, zero pollution.
-- **Propose tools** (`propose_send` / `propose_takeover` / `propose_run`) — **stage only**, never execute. The messenger returns a pending list; you reply “确认” to run it through tmux, or “取消”/timeout (5 min default) to drop it.
+**Intents / tools**
+- `switch_current` — set the current session (cwd). `list_sessions` — list all (project / agent / status / latest input).
+- `consult_session` — **read-only consult**: forks the target into a throwaway copy (`--fork-session --permission-mode plan`) and asks *it*; the answer comes from the worker's own context and **never mutates the original**. Used for "why / how to fix / summarize / explain".
+- `read_reply` — latest reply of the current session. `snapshot_session` — render its terminal pane to an image.
+- `propose_forward` / `propose_takeover` / `propose_exit` / `propose_run` — **staged**, require your "确认".
 
-The LLM uses the Vercel AI SDK. First-class support is **OpenAI-compatible** (`base_url` + `api_key` + `model`), covering self-hosted gateways, proxies, and most compatible endpoints — fully decoupled from Claude Code. Switch it in the web settings page or the config file.
+**Guarantees**
+- **Read/write split**: consult & reads are read-only (fork or transcript); only `propose_*` mutate, and only after confirmation.
+- **Stale-cwd gate**: before any write it checks the current session is alive; if gone it clears the pointer and tells you to re-`switch_current`.
+- **Source attribution**: replies mark who's speaking — the messenger (`🧭`) vs. a worker (`> 🔁 来自 <name·agent>（只读）`). Worker output is never passed off as the messenger's.
+- **Read-only → takeover**: if a read-only consult concludes an edit is needed, the messenger recommends **takeover** (switch that session to edit mode) instead of writing into a read-only context.
+
+The LLM uses the Vercel AI SDK — **openai-compatible / openai / anthropic** (`anthropic` supports `auth_style: bearer` for gateways). Configure via the web settings page or config file; decoupled from Claude Code.
+
+### How a request flows
+
+```mermaid
+sequenceDiagram
+    participant U as You (DingTalk)
+    participant M as Messenger (router)
+    participant W as Worker session
+    U->>M: "how should this bug be fixed?"
+    Note over M: intent = consult (read-only)
+    M->>W: fork read-only (plan mode), ask
+    W-->>M: answer from its own context (original untouched)
+    M-->>U: 🔁 来自 <worker>（只读）: …  + suggest takeover for edits
+    U->>M: "take it over"
+    M-->>U: propose_takeover (pending)
+    U->>M: 确认
+    M->>W: kill + resume in tmux
+    M-->>U: ✅ taken over, ready
+    U->>M: "apply option B"
+    M-->>U: propose_forward (pending)
+    U->>M: 确认
+    M->>W: inject instruction (worker executes)
+```
+
+### Example chat
+
+```
+你 ▸ 列出会话
+🧭 信使 ▸ | 状态 | 短ID | 名称 | 项目 | 最近输入 |
+          | 🔄 | 5122982b | connect-console | connect | … |
+          | ✅ | c233caaf | agentmon | agentmon | … |
+
+你 ▸ 切到 c233caaf
+🧭 信使 ▸ 📍 已切到 agentmon（c233caaf）
+
+你 ▸ 它最近完成了什么？          # 咨询 → 只读 fork
+🧭 信使 ▸ > 🔁 来自 agentmon·claude（只读）：发布了 v0.6.0，换成极光罗盘猫……
+
+你 ▸ 帮我把版本号改成 0.6.1       # 需要改动 → 建议接管
+🧭 信使 ▸ 这需要编辑，建议先接管进入编辑模式。要我提议接管吗？
+你 ▸ 接管 → 确认                  # propose_takeover → 执行
+🧭 信使 ▸ ✅ 已接管 c233caaf，已在 tmux 就绪
+你 ▸ 改好后跑一下测试 → 确认       # propose_forward → 注入 worker 执行
+```
 
 ---
 
@@ -98,6 +151,10 @@ The messenger, read/write planes, and confirm gate are identical across platform
 ## 📇 Access control & clear denials
 
 When a sender isn't in `allowed_sender_ids`, the bot **replies with an explicit “not authorized” message** (instead of silence), telling you which ID to add. Empty allowlist = allow all. The sender ID is whatever the platform reports (e.g. DingTalk `senderStaffId`).
+
+## ⏳ Recency filter (web + IM)
+
+To avoid drowning in old tasks, completed sessions are filtered by age: `[filter] window_days` (1 / 3 / 7, or `0` = all). **Running / waiting sessions are always shown**; only idle/exited ones older than the window are hidden. The web board has a dropdown that persists this, and the **same setting applies to IM `list_sessions`**, so the messenger won't surface stale tasks either.
 
 ## 🖌️ Streaming AI card (DingTalk, optional)
 
@@ -239,14 +296,67 @@ agent-connect config set projects.0.platforms.0.options.client_secret "your-ding
 
 ---
 
-## 🧠 信使 Agent（寻址分派 + 安全闸）
+## 🧠 信使 Agent（manager 路由器）
 
-信使**不是**重路由——它不重新理解或执行你的任务，只做三件事：判断**读还是写**、定位**哪个会话**、选择**哪个动词**，然后调用控制面工具。任务本身仍交给 worker agent。
+信使是**管理路由器**，不是干活的 worker，只做「意图识别 + 路由」；真正任务交给目标 worker 会话。它维护一个**「当前会话」指针（像 shell 的 cwd）**，后续指令无需再点名会话。
 
-- **读工具**（`list_sessions` / `read_session` / `get_status`）：随时可用，只读落盘文件，零污染。
-- **提议工具**（`propose_send` / `propose_takeover` / `propose_run`）：**只暂存**，不执行。信使会回一张待确认清单，你回「确认」才真正经 tmux 执行，「取消」或超时（默认 5 分钟）则作废。
+**意图 / 工具**
+- `switch_current` 切换当前会话；`list_sessions` 列出全部（项目/Agent/状态/最近输入）。
+- `consult_session` **只读咨询**：把目标会话 fork 成一次性副本（`--fork-session --permission-mode plan`）去问**它本身**，答案来自 worker 自己的上下文、**绝不改动原会话**。用于「为什么/怎么改/总结/解释」。
+- `read_reply` 看当前会话最新回复；`snapshot_session` 把终端画面渲染成图片。
+- `propose_forward` / `propose_takeover` / `propose_exit` / `propose_run` —— **只暂存**，需你「确认」。
 
-LLM 用 Vercel AI SDK，首批支持 **OpenAI-compatible**（`base_url` + `api_key` + `model`），覆盖自建网关/代理/多数兼容端点，与 Claude Code 完全解耦。可在 Web 配置页或 config 文件切换。
+**保证**
+- **读写分离**：咨询与读取都是只读（fork 或转录）；只有 `propose_*` 会改动，且必须确认后。
+- **cwd 失效门禁**：写操作前校验当前会话仍在；失效则清空指针并提示重新 `switch_current`。
+- **来源标注**：回复分清「谁在说」——信使（`🧭`）vs worker（`> 🔁 来自 <名称·agent>（只读）`）；绝不把 worker 的话冒充成信使自己的。
+- **只读 → 接管**：只读咨询若得出「需要改动」的结论，信使建议**接管**（把该会话切到编辑模式），而不是在只读上下文里改。
+
+LLM 用 Vercel AI SDK —— **openai-compatible / openai / anthropic**（anthropic 网关可 `auth_style: bearer`），Web 配置页或 config 文件切换，与 Claude Code 解耦。
+
+### 一次请求怎么流动
+
+```mermaid
+sequenceDiagram
+    participant U as 你（钉钉）
+    participant M as 信使（路由器）
+    participant W as worker 会话
+    U->>M: “这个 bug 该怎么改？”
+    Note over M: 意图 = 只读咨询
+    M->>W: fork 只读副本（plan 模式）提问
+    W-->>M: 用它自己的上下文作答（原会话不动）
+    M-->>U: 🔁 来自 <worker>（只读）: …  + 建议接管以编辑
+    U->>M: “接管”
+    M-->>U: propose_takeover（待确认）
+    U->>M: 确认
+    M->>W: kill + 在 tmux 中 resume
+    M-->>U: ✅ 已接管，就绪
+    U->>M: “按方案 B 改”
+    M-->>U: propose_forward（待确认）
+    U->>M: 确认
+    M->>W: 注入指令（worker 执行）
+```
+
+### 会话交互示例
+
+```
+你 ▸ 列出会话
+🧭 信使 ▸ | 状态 | 短ID | 名称 | 项目 | 最近输入 |
+          | 🔄 | 5122982b | connect-console | connect | … |
+          | ✅ | c233caaf | agentmon | agentmon | … |
+
+你 ▸ 切到 c233caaf
+🧭 信使 ▸ 📍 已切到 agentmon（c233caaf）
+
+你 ▸ 它最近完成了什么？          # 咨询 → 只读 fork
+🧭 信使 ▸ > 🔁 来自 agentmon·claude（只读）：发布了 v0.6.0，换成极光罗盘猫……
+
+你 ▸ 帮我把版本号改成 0.6.1       # 需要改动 → 建议接管
+🧭 信使 ▸ 这需要编辑，建议先接管进入编辑模式。要我提议接管吗？
+你 ▸ 接管 → 确认                  # propose_takeover → 执行
+🧭 信使 ▸ ✅ 已接管 c233caaf，已在 tmux 就绪
+你 ▸ 改好后跑一下测试 → 确认       # propose_forward → 注入 worker 执行
+```
 
 ---
 
@@ -263,6 +373,10 @@ cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、D
 ## 📇 访问控制与明确拒绝
 
 当发送者不在 `allowed_sender_ids` 时，机器人会**明确回复「无权限」**（而不是静默），并提示该把哪个 ID 加进名单。名单留空 = 允许所有。发送者 ID 取平台上报值（如钉钉 `senderStaffId`）。
+
+## ⏳ 时效过滤（Web 与 IM 共用）
+
+为避免过多旧任务透出，已完成会话按时效过滤：`[filter] window_days`（1 / 3 / 7，或 `0` = 全部）。**运行中/待输入的会话始终显示**，只有空闲/已退出且超过时长的才隐藏。Web 看板有下拉可切换并持久化，**同一设置对 IM 的 `list_sessions` 同样生效**，信使也不会把陈旧任务列出来。
 
 ## 🖌️ 流式 AI 卡片（钉钉，可选）
 

@@ -31,6 +31,10 @@ const DEFAULTS = {
     on_task_done: true,
     cooldown_ms: 30000,
   },
+  filter: {
+    // 已完成/不活跃任务的时效过滤（天）：仅隐藏空闲/退出且超过该时长的会话；运行中/待输入始终显示。0 = 不过滤。
+    window_days: 3,
+  },
 };
 
 /**
@@ -60,6 +64,7 @@ function loadAppConfig() {
       },
     },
     notify: { ...DEFAULTS.notify, ...(raw.notify || {}) },
+    filter: { ...DEFAULTS.filter, ...(raw.filter || {}) },
     raw,
   };
 }

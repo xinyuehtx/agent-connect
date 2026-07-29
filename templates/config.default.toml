@@ -16,6 +16,10 @@ on_needs_confirm = true          # 会话进入 waiting（需你确认/输入）
 on_task_done = true              # 会话 busy → idle（任务完成）时推送
 cooldown_ms = 30000              # 同一会话同类通知的冷却
 
+# ── 时效过滤（Web 看板与 IM list_sessions 共用，避免过多旧任务透出）──
+[filter]
+window_days = 3                  # 已完成任务只显示近 N 天；0 = 全部。运行中/待输入始终显示
+
 # ── 信使 Agent（Vercel AI SDK）──
 [messenger]
 provider = "openai-compatible"   # openai-compatible | openai | anthropic

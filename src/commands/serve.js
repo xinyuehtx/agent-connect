@@ -65,6 +65,7 @@ async function serve(opts = {}) {
     confirmTtlMs: () => gateFor(loadConfig(), 'dingtalk').confirm_ttl_ms,
     confirmWords: () => gateFor(loadConfig(), 'dingtalk').confirm_words,
     cancelWords: () => gateFor(loadConfig(), 'dingtalk').cancel_words,
+    filterWindowDays: () => loadAppConfig().filter.window_days,
     onExecute: (a, ok) => console.log(`[agent-connect] execute ${a.kind} ok=${ok}`),
   });
 
@@ -119,6 +120,14 @@ async function serve(opts = {}) {
     },
     // 平台无关：按 CC_SESSION_KEY 解析出的平台名取闸门（未配置则用默认）
     getGate: (platform) => gateFor(loadConfig(), platform || 'dingtalk'),
+    // 已完成任务时效过滤（Web 与 IM 共用）
+    getFilter: () => loadAppConfig().filter,
+    setFilter: (patch) => {
+      const raw = loadConfig();
+      raw.filter = raw.filter || {};
+      if (patch.window_days !== undefined) raw.filter.window_days = Number(patch.window_days) || 0;
+      saveConfig(raw);
+    },
     // cc-connect 项目名（用于 cc-connect send -p）与图片渲染 chrome 路径
     getProjectName: () => {
       const raw = loadConfig();

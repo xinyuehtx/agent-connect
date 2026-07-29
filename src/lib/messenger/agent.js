@@ -86,10 +86,10 @@ function buildTools({
 
   return {
     list_sessions: tool({
-      description: '列出本机所有会话（含项目/Agent/状态/最近输入与回复），并标出哪个是当前会话。',
+      description: '列出本机会话（含项目/Agent/状态/最近输入与回复），并标出哪个是当前会话。已按时效过滤掉过旧的已完成任务。',
       inputSchema: z.object({}),
       execute: async () => {
-        const list = await plane.listSessions({ all: false, activity: true });
+        const list = await plane.listSessions({ all: false, activity: true, windowDays: (ctx && ctx.filterWindowDays) || 0 });
         const current = cur();
         return list.map((s) => ({
           sessionId: s.sessionId,

@@ -24,6 +24,7 @@ class AgentConductor {
     this.confirmWords = deps.confirmWords || ['确认', '确定', 'yes', 'y', 'ok'];
     this.cancelWords = deps.cancelWords || ['取消', 'no', 'n'];
     this.confirmTtlMs = deps.confirmTtlMs || 300000;
+    this.filterWindowDays = deps.filterWindowDays || null;
     this.onExecute = deps.onExecute;
   }
 
@@ -127,6 +128,10 @@ class AgentConductor {
     const stage = (kind, params) => this._stage(conversationKey, kind, params);
     // 注入「当前会话」(cwd) 到 ctx，供信使工具默认目标与切换
     const fullCtx = { ...(ctx || {}) };
+    if (this.filterWindowDays) {
+      const v = this.filterWindowDays();
+      fullCtx.filterWindowDays = typeof v === 'function' ? v() : v;
+    }
     if (this.current) {
       fullCtx.currentSessionId = this.current.get(conversationKey);
       fullCtx.setCurrent = (id) => {

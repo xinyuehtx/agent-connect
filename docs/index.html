@@ -15,6 +15,7 @@
       <div class="links">
         <a href="#arch"><span class="zh">架构</span><span class="en">Architecture</span></a>
         <a href="#planes"><span class="zh">读写平面</span><span class="en">Planes</span></a>
+        <a href="#flow"><span class="zh">工作流</span><span class="en">Workflow</span></a>
         <a href="#platforms"><span class="zh">任意 IM</span><span class="en">Any IM</span></a>
         <a href="#start"><span class="zh">快速开始</span><span class="en">Quick start</span></a>
         <a href="#cli">CLI</a>
@@ -54,12 +55,12 @@
       <div class="grid">
         <div class="card">
           <div class="ico">🧭</div>
-          <h3><span class="zh">信使 Agent（寻址分派）</span><span class="en">Messenger Agent (dispatch)</span></h3>
+          <h3><span class="zh">信使 = manager 路由器</span><span class="en">Messenger = manager router</span></h3>
           <p>
-            <span class="zh">用 Vercel AI SDK 实现、与 Claude Code 解耦。只判断「读还是写 / 哪个会话 / 哪个动词」，任务本身仍交给 worker 执行。任意 OpenAI 兼容模型可配。</span>
-            <span class="en">Built on the Vercel AI SDK, decoupled from Claude Code. It only decides read-vs-write, which session, which verb — the task itself still runs in the worker. Any OpenAI-compatible model.</span>
+            <span class="zh">维护「当前会话」指针（像 cwd）。只做意图识别+路由：切换/列出/只读咨询/转发/接管/退出。咨询走 fork 只读副本问 worker 本身，绝不臆测代答。任意 OpenAI/Anthropic 兼容模型。</span>
+            <span class="en">Keeps a “current session” pointer (like cwd). Pure intent-routing: switch / list / read-only consult / forward / takeover / exit. Consults fork a read-only copy and ask the worker itself — never guesses. Any OpenAI/Anthropic-compatible model.</span>
           </p>
-          <span class="tag"><span class="zh">非重路由</span><span class="en">not a re-router</span></span>
+          <span class="tag"><span class="zh">路由，不干活</span><span class="en">routes, doesn't do the work</span></span>
         </div>
         <div class="card">
           <div class="ico">📖</div>
@@ -126,6 +127,41 @@
           <h3>🟠 <span class="zh">写平面（带内）</span><span class="en">Write plane (in-band)</span></h3>
           <p><span class="zh">经 tmux 注入/接管/新建，且只暂存为提议。工具：<code>propose_send</code> / <code>propose_takeover</code> / <code>propose_run</code>，确认后才落地。</span><span class="en">Injects / takes over / spawns via tmux, staged as proposals only. Tools: <code>propose_send</code> / <code>propose_takeover</code> / <code>propose_run</code>, applied after confirm.</span></p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- workflow -->
+  <section id="flow">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">工作流</span><span class="en">Workflow</span></div>
+      <h2><span class="zh">一次请求怎么流动</span><span class="en">How a request flows</span></h2>
+      <p class="sub">
+        <span class="zh">信使维护「当前会话」(cwd)。咨询走只读 fork、需要改动才建议接管、执行前人工确认；回复分清「信使」与「worker」两层。</span>
+        <span class="en">The messenger keeps a “current session” (cwd). Consults are read-only forks; edits prompt a takeover; writes need confirmation; replies separate messenger vs. worker.</span>
+      </p>
+      <div class="diagram">
+<pre><span class="zh">你</span><span class="en">You</span> ──"<span class="zh">这个 bug 怎么改？</span><span class="en">how to fix this bug?</span>"──►  <b>Messenger</b>
+                              │  <span class="r">consult (read-only)</span>
+                              ▼
+                     fork <span class="r">plan/只读</span> ──►  <b>Worker</b>  <span class="zh">(原会话不动)</span><span class="en">(original untouched)</span>
+                              ◄── <span class="zh">用自身上下文作答</span><span class="en">answers from its context</span>
+   <b>Messenger</b> ──►  <span class="zh">你</span><span class="en">You</span>:  &gt; 🔁 <span class="zh">来自</span><span class="en">from</span> &lt;worker&gt;（<span class="zh">只读</span><span class="en">read-only</span>）: …  + <span class="zh">建议接管</span><span class="en">suggest takeover</span>
+   <span class="zh">你</span><span class="en">You</span> ──"<span class="zh">接管</span><span class="en">take over</span>"──► propose_takeover ──<span class="w">确认/confirm</span>──► <span class="zh">kill+resume 进 tmux</span><span class="en">kill+resume in tmux</span>
+   <span class="zh">你</span><span class="en">You</span> ──"<span class="zh">按方案改</span><span class="en">apply the fix</span>"──► propose_forward ──<span class="w">确认/confirm</span>──► <b>Worker</b> <span class="zh">执行</span><span class="en">executes</span></pre>
+      </div>
+      <div class="note" style="margin-top:18px">
+        <pre style="margin:0;white-space:pre-wrap;font:13px/1.6 ui-monospace,monospace;color:var(--muted)"><span class="zh">你 ▸ 切到 c233caaf
+🧭 信使 ▸ 📍 已切到 agentmon（c233caaf）
+你 ▸ 它最近完成了什么？            # 咨询 → 只读 fork
+🧭 信使 ▸ &gt; 🔁 来自 agentmon·claude（只读）：发布了 v0.6.0……
+你 ▸ 帮我把版本号改成 0.6.1        # 需要改动 → 建议接管
+🧭 信使 ▸ 这需要编辑，建议先接管。要我提议接管吗？</span><span class="en">You ▸ switch to c233caaf
+🧭 Messenger ▸ 📍 current = agentmon (c233caaf)
+You ▸ what did it finish recently?      # consult → read-only fork
+🧭 Messenger ▸ &gt; 🔁 from agentmon·claude (read-only): shipped v0.6.0…
+You ▸ bump the version to 0.6.1         # needs an edit → suggest takeover
+🧭 Messenger ▸ that needs editing — take it over first? (propose?)</span></pre>
       </div>
     </div>
   </section>

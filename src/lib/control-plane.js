@@ -125,12 +125,21 @@ class ControlPlane extends EventEmitter {
   /* ---------------- 读平面 ---------------- */
 
   /**
-   * 列出会话（含通道分类）。activity=true 时附带最近一条用户输入/回复/工具（读 transcript）。
-   * @param {object} [opts] { all, activity }
+   * 列出会话（含通道分类）。
+   * @param {object} [opts] { all, activity, windowDays }
+   *   windowDays>0 时按时效过滤：仅隐藏"非运行中/待输入且最近活动超过 N 天"的会话（运行中/待输入始终保留）。
    * @returns {Promise<object[]>}
    */
   async listSessions(opts = {}) {
-    const list = registry.list({ all: !!opts.all }).map(toSummary);
+    let list = registry.list({ all: !!opts.all }).map(toSummary);
+    const win = Number(opts.windowDays || 0);
+    if (win > 0) {
+      const cutoff = Date.now() - win * 86400000;
+      list = list.filter((s) => {
+        if (s.status === 'busy' || s.status === 'waiting') return true; // 活跃始终显示
+        return s.updatedAt && s.updatedAt >= cutoff; // 其余按最近活动时效
+      });
+    }
     if (!opts.activity) {
       return list;
     }
