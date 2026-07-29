@@ -2,6 +2,7 @@
 
 const { z } = require('zod');
 const { buildModel } = require('./provider');
+const { makeTranslator, langName } = require('./translate');
 
 /**
  * 从 AI SDK 错误里提取人类可读信息（很多网关把真实原因放在 responseBody，而 error.message 为空）。
@@ -43,26 +44,48 @@ const SYSTEM_PROMPT = [
   '',
   '**回复必须标明来源**，分清两层：',
   '- 你（信使）自己的话：正常文本，可加「🧭 信使：」前缀。',
-  '- 来自被管控会话的内容（consult_session / read_reply 的 from/answer）：放进引用块并标注来源，例如：',
-  '  > 🔁 来自 <名称·agent>（只读）：<worker 的原话>',
+  '- 来自被管控会话的内容：consult_session / read_reply 会返回 **display** 字段（已排版好来源标注 + worker 原文，且当语种与回复语言不同时附上「🌐 信使译文」）。请把 display **原样**作为回复主体输出，不要改写其中的原文或译文；可在其前后加你自己的简短说明。',
+  '- display 内若含「🌐 信使译文」，表示 worker 原文与当前回复语言不同——**原文与译文都必须完整呈现给用户，缺一不可**。',
   '不要把 worker 的回答冒充成你自己的话。',
   '',
   '排版：多会话用 Markdown 表格（状态/名称/项目/Agent/最近输入），emoji 标状态（✅ 空闲 / 🔄 运行中 / ⏳ 待输入 / 💀 已退出 / 🧩 IDE），当前会话用 📍。展示 8 位短 ID，调用工具用完整 sessionId。',
 ].join('\n');
 
 /**
+ * 动态回复语言指令（追加到 system）。
+ * @param {string} lang 语言码
+ * @returns {string}
+ */
+function langDirective(lang) {
+  const name = langName(lang);
+  return `【回复语言】请始终用「${name}」与用户交流（你自己的话、状态提示、表格等）。`
+    + `worker 原文保持原样不改写；若其语种与「${name}」不同，工具会在 display 里附上译文，你照原样带上即可，确保用户同时看到原文与译文。`;
+}
+
+/**
  * 构造信使（manager 路由器）的工具集。信使维护「当前会话」(ctx.currentSessionId, 类似 cwd)，
  * 转发/接管/退出/读取默认作用于当前会话。变更类一律走 stage(需确认)。
- * @param {object} deps { plane, stage, tool, ctx }
+ * @param {object} deps { plane, stage, tool, ctx, translate }
  * @returns {object} AI SDK tools
  */
 function buildTools({
-  plane, stage, tool, ctx,
+  plane, stage, tool, ctx, translate,
 }) {
   const clip = (s, n) => (s && s.length > n ? `${s.slice(0, n)}…` : (s || ''));
   const cur = () => (ctx && ctx.currentSessionId) || null;
   const target = (arg) => arg || cur(); // 默认当前会话
   const noCurrent = { ok: false, note: '没有「当前会话」。请先用 switch_current 切换，或在参数里指定 sessionId。' };
+
+  // 翻译器（未注入则空操作）；跨语种时把译文附在原文之后。
+  const maybeTranslate = typeof translate === 'function' ? translate : async () => null;
+  // 组装「来源标注 + 原文（+译文）」的展示块，供信使原样转发。
+  const buildDisplay = (fromLabel, tag, body, tr) => {
+    let d = `🔁 来自 ${fromLabel}（${tag}）：\n\n${body}`;
+    if (tr && tr.text) {
+      d += `\n\n🌐 信使译文（${tr.to}）：\n\n${tr.text}`;
+    }
+    return d;
+  };
 
   // 门禁：执行路由命令前校验目标会话仍有效。失效则清空当前指针并提示。
   const validateTarget = async (arg) => {
@@ -128,11 +151,18 @@ function buildTools({
         const last = [...events].reverse().find((e) => e.kind === 'assistant' && e.text);
         let detail = null;
         try { detail = await plane.getSession(id); } catch (e) { /* 已退出 */ }
+        const fromLabel = `${(detail && detail.name) || String(id).slice(0, 8)}·${detail ? detail.tool : '?'}`;
+        const status = detail ? detail.status : '(已退出)';
+        const lastReply = last ? last.text.slice(0, 1200) : '(暂无回复)';
+        const tr = last ? await maybeTranslate(lastReply) : null;
         return {
           sessionId: id,
-          from: `${(detail && detail.name) || String(id).slice(0, 8)}·${detail ? detail.tool : '?'}`,
-          status: detail ? detail.status : '(已退出)',
-          lastReply: last ? last.text.slice(0, 1200) : '(暂无回复)',
+          from: fromLabel,
+          status,
+          lastReply,
+          translation: tr && tr.text,
+          translated_to: tr && tr.to,
+          display: buildDisplay(fromLabel, status, lastReply, tr),
         };
       },
     }),
@@ -150,11 +180,18 @@ function buildTools({
         if (v.note) return v.note;
         const r = await plane.consult(v.id, question);
         if (!r.ok) return { ok: false, note: `只读咨询失败: ${r.error || '未知'}（可接管后再问）` };
+        const from = `${r.from.name}·${r.from.tool}`;
+        const excerpt = r.mode === 'excerpt';
+        const tag = excerpt ? '只读·最近记录节选,可能有损' : '只读';
+        const tr = await maybeTranslate(r.answer);
         return {
           ok: true,
-          mode: r.mode === 'excerpt' ? 'read-only-excerpt(lossy)' : 'read-only-fork',
-          from: `${r.from.name}·${r.from.tool}`,
+          mode: excerpt ? 'read-only-excerpt(lossy)' : 'read-only-fork',
+          from,
           answer: r.answer,
+          translation: tr && tr.text,
+          translated_to: tr && tr.to,
+          display: buildDisplay(from, tag, r.answer, tr),
         };
       },
     }),
@@ -267,9 +304,12 @@ class Messenger {
     const cfg = this.getCfg();
     const { generateText, stepCountIs, tool } = await import('ai');
     const model = await buildModel(cfg);
+    const replyLang = cfg.reply_language || 'zh';
+    const translate = makeTranslator(model, replyLang);
     const tools = buildTools({
-      plane: this.plane, stage, tool, ctx,
+      plane: this.plane, stage, tool, ctx, translate,
     });
+    const system = `${SYSTEM_PROMPT}\n\n${langDirective(replyLang)}`;
 
     // 只带最近很短的窗口：信使是分派器，不需要长期累积上下文（避免变成"主 loop"）
     const history = this.historyStore.get(conversationKey).slice(-HISTORY_WINDOW);
@@ -279,7 +319,7 @@ class Messenger {
     try {
       result = await generateText({
         model,
-        system: SYSTEM_PROMPT,
+        system,
         messages,
         tools,
         stopWhen: stepCountIs(cfg.max_steps || 4),

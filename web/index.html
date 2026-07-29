@@ -120,6 +120,19 @@
         <label>Base URL</label><input id="llm_base_url" placeholder="https://gateway/v1">
         <label>API Key</label><input id="llm_api_key" type="password" placeholder="留空保持不变">
         <label>Auth style <span class="hint">(anthropic 网关可填 bearer)</span></label><input id="llm_auth" placeholder="留空=默认">
+        <label>回复语言 <span class="hint">(worker 回复若为其他语种,自动附「信使译文」)</span></label>
+        <select id="llm_reply_language">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+          <option value="de">Deutsch</option>
+          <option value="ru">Русский</option>
+          <option value="pt">Português</option>
+          <option value="it">Italiano</option>
+        </select>
         <div class="modal__row"><button class="btn" id="llmSave">保存</button></div>
       </div>
       <div class="tabpane" id="tab-im">

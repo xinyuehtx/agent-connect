@@ -159,6 +159,10 @@
         <span class="en">🧵 <b>Quoted replies</b>: every reply is prefixed with the command that triggered it (`&gt; 🗨️ 你：list sessions`), so overlapping commands never cross wires. DingTalk has no native quote-reply via cc-connect, so it's done in the reply content — consistent across platforms. Turns are serialized per conversation to avoid shared-context races. Toggle `im.platforms.&lt;name&gt;.quote_reply` (on by default).</span>
       </div>
       <div class="note" style="margin-top:14px">
+        <span class="zh">🌐 <b>回复语言与自动翻译</b>：信使回复语言可配（默认中文，`messenger.reply_language` 或 设置→LLM Provider→回复语言）。worker 回复若为其他语种，信使翻译一次并把「🌐 信使译文」附在原文之后，原文译文都给你看；同语种自动跳过、失败静默降级。支持 zh/en/ja/ko/fr/es/de/ru/pt/it。</span>
+        <span class="en">🌐 <b>Reply language &amp; auto-translation</b>: the messenger's reply language is configurable (default Chinese; `messenger.reply_language` or Settings→LLM Provider). If a worker replies in another language, the messenger translates once and appends a «🌐 信使译文» block after the original — you see both. Same-language is skipped; failures degrade silently. Supports zh/en/ja/ko/fr/es/de/ru/pt/it.</span>
+      </div>
+      <div class="note" style="margin-top:14px">
         <pre style="margin:0;white-space:pre-wrap;font:13px/1.6 ui-monospace,monospace;color:var(--muted)"><span class="zh">你 ▸ 切到 c233caaf
 🧭 信使 ▸ 📍 已切到 agentmon（c233caaf）
 你 ▸ 它最近完成了什么？            # 咨询 → 只读 fork

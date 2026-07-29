@@ -15,6 +15,8 @@ const DEFAULTS = {
     base_url: '',
     max_steps: 8,
     conversation_key: 'messenger',
+    // 信使回复语言（worker 回复若为其他语种，信使自动附上译文）。默认中文。
+    reply_language: 'zh',
   },
   dingtalk: {
     enabled: true,

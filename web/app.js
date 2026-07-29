@@ -302,6 +302,7 @@ async function openSettings() {
   $('llm_model').value = llm.model || ''; $('llm_base_url').value = llm.base_url || '';
   $('llm_api_key').value = ''; $('llm_api_key').placeholder = llm.api_key ? `已设置 ${llm.api_key}` : '未设置';
   $('llm_auth').value = llm.auth_style || '';
+  $('llm_reply_language').value = llm.reply_language || 'zh';
   $('im_client_id').value = im.client_id || ''; $('im_client_secret').value = '';
   $('im_client_secret').placeholder = im.client_secret ? '已设置' : '未设置';
   $('im_enabled').checked = !!im.enabled; $('im_prefix').value = im.command_prefix || '';
@@ -310,7 +311,7 @@ async function openSettings() {
   $('im_reaction').value = im.reaction_emoji || ''; $('im_done').value = im.done_emoji || '';
 }
 async function saveLlm() {
-  const body = { provider: $('llm_provider').value, model: $('llm_model').value.trim(), base_url: $('llm_base_url').value.trim(), auth_style: $('llm_auth').value.trim() };
+  const body = { provider: $('llm_provider').value, model: $('llm_model').value.trim(), base_url: $('llm_base_url').value.trim(), auth_style: $('llm_auth').value.trim(), reply_language: $('llm_reply_language').value };
   const k = $('llm_api_key').value.trim(); if (k) body.api_key = k;
   toast((await api('/api/config/llm', { method: 'POST', body: JSON.stringify(body) })).ok ? 'LLM 已保存' : '保存失败');
 }

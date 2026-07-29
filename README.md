@@ -181,6 +181,10 @@ When a sender isn't in `allowed_sender_ids`, the bot **replies with an explicit 
 
 Every reply to a command is prefixed with a compact quote of the command that triggered it (`> 🗨️ 你：list sessions`), so you always know which message a reply answers — even when several commands are in flight and answers arrive out of order. DingTalk has **no native quote-reply through cc-connect** (`reply_to_trigger` is Feishu-only), so this is done in the reply content and works on every platform. Turns are also **serialized per conversation**, so overlapping commands can't race the shared messenger context or arrive out of order. Toggle with `im.platforms.<name>.quote_reply` (default `true`).
 
+## 🌐 Reply language & auto-translation
+
+The messenger replies in a configurable language (default **Chinese**; `messenger.reply_language`, or **Settings → LLM Provider → 回复语言**). When a **worker's reply** comes back in a different language, the messenger translates it once and **appends the translation after the original**, so you always see both — e.g. an English agent answer arrives with a `🌐 信使译文（中文）` block beneath the original. Same-language replies are detected and left untranslated (no extra call); translation failures degrade silently to the original. Supported: zh / en / ja / ko / fr / es / de / ru / pt / it.
+
 ## ⏳ Recency filter (web + IM)
 
 To avoid drowning in old tasks, completed sessions are filtered by age: `[filter] window_days` (1 / 3 / 7, or `0` = all). **Running / waiting sessions are always shown**; only idle/exited ones older than the window are hidden. The web board has a dropdown that persists this, and the **same setting applies to IM `list_sessions`**, so the messenger won't surface stale tasks either.

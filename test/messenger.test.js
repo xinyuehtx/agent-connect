@@ -590,3 +590,95 @@ test('conductor.handle: different keys run concurrently', async () => {
   await Promise.all([cond.handle('a', 'x'), cond.handle('b', 'y')]);
   assert.strictEqual(maxActive, 2, '不同会话应可并发');
 });
+
+/* ---------------- 回复语言 / 译文 ---------------- */
+
+const {
+  langName, obviouslyTarget, scriptStats, makeTranslator,
+} = require('../src/lib/messenger/translate');
+
+test('translate.langName maps codes, falls back', () => {
+  assert.strictEqual(langName('zh'), '中文');
+  assert.strictEqual(langName('en'), 'English');
+  assert.strictEqual(langName('xx'), 'xx');
+  assert.strictEqual(langName(''), '中文');
+});
+
+test('translate.scriptStats counts CJK vs latin', () => {
+  const s = scriptStats('你好 hello');
+  assert.strictEqual(s.cjk, 2);
+  assert.strictEqual(s.latin, 5);
+});
+
+test('translate.obviouslyTarget: zh target skips Chinese, flags English', () => {
+  assert.strictEqual(obviouslyTarget('这是中文回复', 'zh'), true);
+  assert.strictEqual(obviouslyTarget('this is english', 'zh'), false);
+  assert.strictEqual(obviouslyTarget('   ', 'zh'), true); // 无可译内容
+});
+
+test('translate.obviouslyTarget: en target skips English, flags Chinese', () => {
+  assert.strictEqual(obviouslyTarget('this is english', 'en'), true);
+  assert.strictEqual(obviouslyTarget('这是中文', 'en'), false);
+});
+
+test('makeTranslator returns null for already-target text (no LLM call)', async () => {
+  let called = 0;
+  const model = { get generateText() { called += 1; return null; } };
+  const tr = makeTranslator(model, 'zh');
+  assert.strictEqual(await tr('这是中文，无需翻译'), null);
+  assert.strictEqual(called, 0, '同语种应快速跳过，不调用模型');
+});
+
+test('consult_session appends translation to display when languages differ', async () => {
+  const { buildTools } = require('../src/lib/messenger/agent');
+  const plane = {
+    getSession: async (id) => ({ sessionId: id, name: 'A', tool: 'claude', status: 'idle' }),
+    consult: async () => ({ ok: true, answer: 'Fixed the null pointer bug.', from: { name: 'A', tool: 'claude', short: 'aaaa' } }),
+  };
+  const ctx = { currentSessionId: 'aaaa-full', setCurrent() {} };
+  const translate = async (t) => ({ text: `【译】${t}`, to: '中文' });
+  const tools = buildTools({
+    plane, stage: () => ({}), tool: (d) => d, ctx, translate,
+  });
+  const r = await tools.consult_session.execute({ question: '改了啥' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.translation, '【译】Fixed the null pointer bug.');
+  assert.strictEqual(r.translated_to, '中文');
+  assert.match(r.display, /Fixed the null pointer bug\./); // 原文
+  assert.match(r.display, /🌐 信使译文（中文）/); // 译文标注
+  assert.match(r.display, /【译】Fixed the null pointer bug\./); // 译文内容
+});
+
+test('consult_session: no translation → display has original only', async () => {
+  const { buildTools } = require('../src/lib/messenger/agent');
+  const plane = {
+    getSession: async (id) => ({ sessionId: id, name: 'A', tool: 'claude', status: 'idle' }),
+    consult: async () => ({ ok: true, answer: '已修复空指针。', from: { name: 'A', tool: 'claude', short: 'aaaa' } }),
+  };
+  const ctx = { currentSessionId: 'aaaa-full', setCurrent() {} };
+  const translate = async () => null; // 同语种
+  const tools = buildTools({
+    plane, stage: () => ({}), tool: (d) => d, ctx, translate,
+  });
+  const r = await tools.consult_session.execute({ question: '改了啥' });
+  assert.ok(!r.translation);
+  assert.match(r.display, /已修复空指针。/);
+  assert.doesNotMatch(r.display, /信使译文/);
+});
+
+test('read_reply appends translation to display when languages differ', async () => {
+  const { buildTools } = require('../src/lib/messenger/agent');
+  const plane = {
+    getSession: async (id) => ({ sessionId: id, name: 'W', tool: 'claude', status: 'idle' }),
+    getMessages: async () => [{ kind: 'assistant', text: 'Build passed, all green.' }],
+  };
+  const ctx = { currentSessionId: 'bbbb-full', setCurrent() {} };
+  const translate = async (t) => ({ text: `【译】${t}`, to: '中文' });
+  const tools = buildTools({
+    plane, stage: () => ({}), tool: (d) => d, ctx, translate,
+  });
+  const r = await tools.read_reply.execute({});
+  assert.strictEqual(r.translated_to, '中文');
+  assert.match(r.display, /Build passed, all green\./);
+  assert.match(r.display, /🌐 信使译文（中文）/);
+});
