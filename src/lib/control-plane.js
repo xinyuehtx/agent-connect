@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { EventEmitter } = require('events');
 
 const registry = require('./registry');
@@ -231,26 +231,61 @@ class ControlPlane extends EventEmitter {
     }
     const from = { name: s.name || String(s.sessionId).slice(0, 8), tool: s.tool, short: String(s.sessionId).slice(0, 8) };
     if (!adapter.bin) {
-      // 无 CLI 的 agent（如 QwenWorkCN 桌面应用）不支持 fork 只读咨询
       return { ok: false, error: `${s.tool} 是桌面应用，无 CLI，无法只读咨询（可用 read_reply 看最新回复）`, from };
     }
+    if (!adapter.readonlyMode) {
+      return { ok: false, error: `${s.tool} 无只读(plan)模式，无法只读咨询；建议接管后再问`, from };
+    }
+    // 体量守卫：过大的会话 fork 会很慢/超时，直接快速失败并引导接管，避免阻塞回复
+    const file = adapter.transcriptPath(s.cwd, s.sessionId);
+    try {
+      if (file) {
+        const sz = fs.statSync(file).size;
+        if (sz > (opts.maxBytes || 1800000)) {
+          return {
+            ok: false,
+            tooLarge: true,
+            error: `会话过大（${(sz / 1e6).toFixed(1)}MB），只读 fork 会超时；建议接管后直接问，或用 read_reply 看最近内容`,
+            from,
+          };
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     const args = [
       '-p', question,
       '--resume', s.sessionId,
       '--fork-session',
-      '--permission-mode', 'plan', // 只读：只规划/回答，不编辑
+      '--permission-mode', adapter.readonlyMode, // 只读：只规划/回答，不编辑
       '--output-format', 'json',
     ];
     const cwd = s.cwd || process.cwd();
+    // 稳健 PATH：daemon 可能非登录 shell，补上常见 claude 安装路径
+    const env = {
+      ...process.env,
+      PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.HOME}/.nvm/versions/node/v24.15.0/bin:${process.env.PATH || ''}`,
+    };
+    const timeoutMs = opts.timeoutMs || 90000;
     return new Promise((resolve) => {
-      execFile(adapter.bin, args, {
-        cwd, timeout: opts.timeoutMs || 120000, maxBuffer: 16 * 1024 * 1024, env: process.env,
-      }, (err, stdout, stderr) => {
-        if (err && !stdout) {
-          resolve({ ok: false, error: ((stderr || err.message || '').trim()).slice(0, 200), from });
-          return;
+      let out = '';
+      let err = '';
+      let done = false;
+      // stdio: 忽略 stdin（否则 headless claude 会等 3s stdin）
+      const child = spawn(adapter.bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+      const finish = (r) => { if (!done) { done = true; clearTimeout(timer); resolve(r); } };
+      const timer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch (e) { /* ignore */ }
+        finish({ ok: false, error: `只读咨询超时（${Math.round(timeoutMs / 1000)}s）——会话可能较大，建议接管后再问`, from });
+      }, timeoutMs);
+      child.stdout.on('data', (d) => { out += d; });
+      child.stderr.on('data', (d) => { err += d; });
+      child.on('error', (e) => finish({ ok: false, error: (e.message || '').slice(0, 160), from }));
+      child.on('close', (code) => {
+        if (code !== 0 && !out) {
+          finish({ ok: false, error: (err || `exit ${code}`).trim().slice(0, 200), from });
+        } else {
+          finish({ ok: true, answer: extractResult(out), from });
         }
-        resolve({ ok: true, answer: extractResult(stdout), from });
       });
     });
   }

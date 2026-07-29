@@ -124,7 +124,7 @@ function buildTools({
       execute: async ({ sessionId }) => {
         const id = target(sessionId);
         if (!id) return noCurrent;
-        const events = await plane.getMessages(id, { limit: 6 });
+        const events = await plane.getMessages(id, { limit: 40 });
         const last = [...events].reverse().find((e) => e.kind === 'assistant' && e.text);
         let detail = null;
         try { detail = await plane.getSession(id); } catch (e) { /* 已退出 */ }

@@ -96,6 +96,7 @@ module.exports = {
   tool: 'claude',
   bin: 'claude',
   defaultMode: 'bypassPermissions', // Claude Code 用驼峰
+  readonlyMode: 'plan', // 只读咨询(fork)用 plan 模式
   CLAUDE_DIR,
   SESSIONS_DIR,
   PROJECTS_DIR,

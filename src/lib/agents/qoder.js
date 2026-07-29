@@ -9,22 +9,23 @@ const {
 const { resolveTranscript, searchTranscript, newestSessionId, encodeCwd } = require('../transcript');
 
 const HOME = os.homedir();
-// qodercli 是 Claude Code 衍生品，会话数据在 ~/.qoderwork/projects/<转义cwd>/<id>.jsonl
-const QODER_DIR = process.env.QODER_CONFIG_DIR || path.join(HOME, '.qoderwork');
+// Qoder CLI（qodercli / /usr/local/bin/qoder）是 Claude Code 衍生品，会话数据在 ~/.qoder/projects/<转义cwd>/<id>.jsonl
+// （注意：桌面应用 QoderWork.app 的数据在 ~/.qoderwork，由 qoderwork 适配器只读监控，两者不同）
+const QODER_DIR = process.env.QODER_CONFIG_DIR || path.join(HOME, '.qoder');
 const PROJECTS_DIR = path.join(QODER_DIR, 'projects');
 // 就绪/忙碌判定的时间窗（transcript 在此窗内被写过则视为 busy）
 const BUSY_WINDOW_MS = 15000;
 
 /**
- * 判断一个进程命令行是否为 qodercli（排除 IDE app / 桌面版 / 浏览器扩展）。
+ * 判断一个进程命令行是否为 Qoder CLI（qoder / qodercli 终端进程；排除 Qoder.app / QoderWork.app / 扩展）。
  * @param {string} command
  * @returns {boolean}
  */
 function isQoderCli(command) {
-  if (!/(^|[/\s])qodercli(\s|$)/.test(command)) {
+  if (!/(^|[/\s])qoder(cli)?(\s|$)/i.test(command)) {
     return false;
   }
-  return !/(\.app\/|QoderWork|Qoder Helper|qoderwake|chrome-extension|--type=)/.test(command);
+  return !/(\.app\/|QoderWork|Qoder Helper|qoderwake|qoderwork|chrome-extension|Electron|--type=)/i.test(command);
 }
 
 /**

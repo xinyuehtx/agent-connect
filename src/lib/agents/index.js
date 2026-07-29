@@ -3,14 +3,16 @@
 const claude = require('./claude');
 const qoder = require('./qoder');
 const qwen = require('./qwen');
+const qoderwork = require('./qoderwork');
 
-// Claude Code 有原生运行态注册表（~/.claude/sessions），发现最干净；
-// qodercli 是其衍生品（transcript 同构，在 ~/.qoderwork/projects），无运行态注册表，走 ps+lsof 发现；
-// QwenWorkCN 是桌面 app（~/.qwenworkcn/projects，transcript 同构），无 CLI/tmux → 只读监控。
+// Claude Code：原生运行态注册表（~/.claude/sessions），发现最干净。
+// Qoder CLI（qodercli）：Claude Code 衍生品，~/.qoder/projects，无注册表 → ps 发现，可控 + tmux。
+// QwenWorkCN / QoderWork：Electron 桌面应用（~/.qwenworkcn、~/.qoderwork），transcript 同构，无 CLI → 只读监控。
 const ADAPTERS = {
   claude,
   qoder,
   qwen,
+  qoderwork,
 };
 
 /**

@@ -422,6 +422,21 @@ test('qwen adapter: registered, monitor-only (no CLI bin), parses cwd from trans
   assert.strictEqual(qwen.cwdFromTranscript(f), '/Users/x/proj');
 });
 
+test('adapters: qoder(CLI)=controllable dir ~/.qoder, qoderwork(GUI)=monitor-only', () => {
+  const { getAdapter } = require('../src/lib/agents');
+  const qoder = getAdapter('qoder');
+  const qoderwork = getAdapter('qoderwork');
+  assert.ok(qoder && qoderwork);
+  assert.match(qoder.PROJECTS_DIR, /\.qoder\/projects$/); // CLI data dir fixed (not .qoderwork)
+  assert.strictEqual(qoder.bin, 'qodercli'); // controllable
+  assert.strictEqual(qoderwork.bin, ''); // GUI → monitor-only
+  assert.match(qoderwork.PROJECTS_DIR, /\.qoderwork\/projects$/);
+  // isQoderCli matches CLI, excludes the two desktop apps
+  assert.ok(qoder.isQoderCli('/usr/local/bin/qoder -r abc'));
+  assert.ok(!qoder.isQoderCli('/Applications/QoderWork.app/Contents/MacOS/QoderWork'));
+  assert.ok(!qoder.isQoderCli('/Applications/Qoder.app/Contents/MacOS/Qoder'));
+});
+
 test('consult_session: read-only fork returns attributed answer; stale gate applies', async () => {
   const { buildTools } = require('../src/lib/messenger/agent');
   const plane = {
