@@ -82,6 +82,7 @@ class SessionNotifier {
     const short = String(s.sessionId).slice(0, 8);
     const name = s.name || short;
     const proj = s.cwd ? s.cwd.split('/').slice(-1)[0] : '?';
+    const agent = s.tool ? ` · ${s.tool}` : '';
     let snippet = '';
     try {
       if (this.getMessages) {
@@ -92,8 +93,8 @@ class SessionNotifier {
     } catch (err) { /* ignore */ }
 
     const head = kind === 'needs_confirm'
-      ? `⏳ 需要你确认/输入 · ${name}（${proj}）[${short}]`
-      : `✅ 任务完成 · ${name}（${proj}）[${short}]`;
+      ? `⏳ 需要你确认/输入 · 来自 ${name}（${proj}${agent}）[${short}]`
+      : `✅ 任务完成 · 来自 ${name}（${proj}${agent}）[${short}]`;
     const message = snippet ? `${head}\n\n${snippet}` : head;
 
     const r = this.send({

@@ -19,7 +19,7 @@ function pad(str, width) {
 }
 
 /**
- * cc-router project list
+ * agent-connect project list
  * 以表格形式列出所有项目。
  */
 function projectList() {
@@ -27,7 +27,7 @@ function projectList() {
   const projects = Array.isArray(config.projects) ? config.projects : [];
 
   if (projects.length === 0) {
-    console.log('暂无项目。使用 cc-router project add <name> <work_dir> 添加。');
+    console.log('暂无项目。使用 agent-connect project add <name> <work_dir> 添加。');
     return;
   }
 

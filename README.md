@@ -1,12 +1,12 @@
-# 🤖 cc-connect-router
+# 🤖 agent-connect
 
-**English** | [简体中文](#-cc-connect-router-简体中文)
+**English** | [简体中文](#-agent-connect-简体中文)
 
 > Monitor and control **multiple** coding-agent sessions (Claude Code / qodercli) running on your machine — straight from DingTalk on your phone. **Read/write split · one-to-many · messenger agent for intent dispatch · human-confirmed writes.**
 
 📖 **Intro site:** https://xinyuehtx.github.io/connect/
 
-Send one message in DingTalk to see the status of every agent session on your machine, pull results read-only, and inject follow-up instructions into a specific task. A lightweight **messenger agent** (built on the Vercel AI SDK, any OpenAI-compatible model) reads your intent, decides read vs. write, and targets the right session — every mutation of a worker session waits for **your confirmation**. Messages ride [cc-connect](https://github.com/chenhg5/cc-connect) for DingTalk ⇄ local transport; a companion `cc-router serve` provides a web console.
+Send one message in DingTalk to see the status of every agent session on your machine, pull results read-only, and inject follow-up instructions into a specific task. A lightweight **messenger agent** (built on the Vercel AI SDK, any OpenAI-compatible model) reads your intent, decides read vs. write, and targets the right session — every mutation of a worker session waits for **your confirmation**. Messages ride [cc-connect](https://github.com/chenhg5/cc-connect) for DingTalk ⇄ local transport; a companion `agent-connect serve` provides a web console.
 
 ---
 
@@ -16,10 +16,10 @@ Three layers, one job each:
 
 - **Messenger Agent (dispatch, not a re-router)** — built on the AI SDK, decoupled from Claude Code. It only decides *read vs. write / which session / which verb* and calls the control plane via tools; **the task itself still runs in the worker agent.** The messenger keeps its own conversation context (shared by web + DingTalk) and **never enters a worker's context** — that's what makes read/write separation work for natural-language input.
 - **Read / write planes** — reads (list/read) only touch Claude Code's on-disk session registry and transcripts: zero side effects, never the worker process. Writes (send/takeover/run) go through tmux, gated by a **propose → confirm → execute** state machine.
-- **Transport** — still cc-connect. Because cc-connect only accepts custom programs through its `acp` agent type, the messenger plugs in as a thin **ACP bridge** (`cc-router acp`) that forwards to the `cc-router serve` daemon.
+- **Transport** — still cc-connect. Because cc-connect only accepts custom programs through its `acp` agent type, the messenger plugs in as a thin **ACP bridge** (`agent-connect acp`) that forwards to the `agent-connect serve` daemon.
 
 ```
-DingTalk ─Stream─► cc-connect ─exec─► cc-router acp (bridge) ─HTTP─► cc-router serve (daemon)
+DingTalk ─Stream─► cc-connect ─exec─► agent-connect acp (bridge) ─HTTP─► agent-connect serve (daemon)
                                                                         │
    ┌─────────────────────────────────────────────────────────────────┐ │
    │  Web console + SSE + config       gate (allowlist / prefix / confirm) │◄┘
@@ -39,36 +39,36 @@ DingTalk ─Stream─► cc-connect ─exec─► cc-router acp (bridge) ─HTTP
 ## 📦 Install
 
 ```bash
-npm install -g @tengxiaohtx/connect
+npm install -g @tengxiaohtx/agent-connect
 ```
 
 ## 🚀 Quick start
 
 ```bash
-# 1. Create default config at ~/.cc-connect-router/config.toml
-cc-router init
+# 1. Create default config at ~/.agent-connect/config.toml
+agent-connect init
 
 # 2. Start the web console daemon (prints an access token on first run)
-cc-router serve
+agent-connect serve
 #   Open http://127.0.0.1:8787 → log in with the printed token
 #   Settings → LLM Provider: base_url / api_key / model (any OpenAI-compatible endpoint)
 #   Settings → IM connector: DingTalk client_id / client_secret + gate (prefix / allowlist)
 
 # 3. In another terminal, start cc-connect (DingTalk ⇄ local)
-cc-router start
+agent-connect start
 ```
 
 Everything is configurable via CLI too (equivalent to the settings page):
 
 ```bash
-cc-router config set messenger.base_url "https://your-gateway/v1"
-cc-router config set messenger.api_key  "sk-..."
-cc-router config set messenger.model    "gpt-4o-mini"
-cc-router config set projects.0.platforms.0.options.client_id     "your-dingtalk-client-id"
-cc-router config set projects.0.platforms.0.options.client_secret "your-dingtalk-client-secret"
+agent-connect config set messenger.base_url "https://your-gateway/v1"
+agent-connect config set messenger.api_key  "sk-..."
+agent-connect config set messenger.model    "gpt-4o-mini"
+agent-connect config set projects.0.platforms.0.options.client_id     "your-dingtalk-client-id"
+agent-connect config set projects.0.platforms.0.options.client_secret "your-dingtalk-client-secret"
 ```
 
-DingTalk credentials come from an **internal app / bot** on the [DingTalk Open Platform](https://open.dingtalk.com) with **Stream mode** enabled. The default config already wires the messenger as cc-connect's `acp` agent (`cmd = "cc-router"`, `args = ["acp"]`) — no manual edit needed.
+DingTalk credentials come from an **internal app / bot** on the [DingTalk Open Platform](https://open.dingtalk.com) with **Stream mode** enabled. The default config already wires the messenger as cc-connect's `acp` agent (`cmd = "agent-connect"`, `args = ["acp"]`) — no manual edit needed.
 
 > In DingTalk, messages need the `/ai` prefix to reach the messenger (e.g. `/ai list sessions`). Reply `确认`/`取消` (yes/no) to a pending action. The prefix is configurable, or leave it empty to process every message.
 
@@ -87,10 +87,10 @@ The LLM uses the Vercel AI SDK. First-class support is **OpenAI-compatible** (`b
 
 ## 🌐 Any IM (not just DingTalk)
 
-Because cc-connect bridges **many platforms** (DingTalk, Feishu, Telegram, Slack, Discord, WeChat Work, QQ, LINE…), and our messenger plugs in as its platform-agnostic `acp` agent, cc-connect-router works with **any of them**. The ACP bridge reads the platform from cc-connect's `CC_SESSION_KEY` and applies the matching gate.
+Because cc-connect bridges **many platforms** (DingTalk, Feishu, Telegram, Slack, Discord, WeChat Work, QQ, LINE…), and our messenger plugs in as its platform-agnostic `acp` agent, agent-connect works with **any of them**. The ACP bridge reads the platform from cc-connect's `CC_SESSION_KEY` and applies the matching gate.
 
 To add an IM:
-1. Configure that platform in the cc-connect side of `~/.cc-connect-router/config.toml` (its own `[[projects.platforms]]` + credentials — see cc-connect docs).
+1. Configure that platform in the cc-connect side of `~/.agent-connect/config.toml` (its own `[[projects.platforms]]` + credentials — see cc-connect docs).
 2. (Optional) Add a gate for it: `[im.platforms.<name>]` with `enabled` / `command_prefix` / `allowed_sender_ids` / confirm words. If omitted, defaults apply (enabled, empty allowlist = allow all).
 
 The messenger, read/write planes, and confirm gate are identical across platforms — only the transport differs.
@@ -113,17 +113,17 @@ Replies are sent as **Markdown** (tables, bold, code blocks, emoji status), so t
 
 | Command | Description |
 |---------|-------------|
-| `cc-router init [--force]` | Create config dir + default config (`--force` overwrites) |
-| `cc-router serve [-H host] [-p port]` | Start web console + messenger daemon (planes + gate; prints token on first run) |
-| `cc-router acp` | ACP bridge for cc-connect (spawned by cc-connect; don't run by hand) |
-| `cc-router start` | Start cc-connect (DingTalk ⇄ local transport) |
-| `cc-router config get/set/remove/list` | Read/write config (dot-path keys, sensitive fields masked) |
-| `cc-router project add/remove/list` | Manage cc-connect projects |
-| `cc-router agent list [-a] [--json]` | List running agent sessions |
-| `cc-router agent read <id> [--full]` | Read status + latest reply (read-only, no pollution) |
-| `cc-router agent send <id> "<text>"` | Inject an instruction into a tmux session |
-| `cc-router agent takeover <id> [--force]` | Adopt a non-tmux session (kill + resume in tmux) |
-| `cc-router agent run ["<prompt>"] [-w dir]` | Spawn a new remote-controllable session in tmux |
+| `agent-connect init [--force]` | Create config dir + default config (`--force` overwrites) |
+| `agent-connect serve [-H host] [-p port]` | Start web console + messenger daemon (planes + gate; prints token on first run) |
+| `agent-connect acp` | ACP bridge for cc-connect (spawned by cc-connect; don't run by hand) |
+| `agent-connect start` | Start cc-connect (DingTalk ⇄ local transport) |
+| `agent-connect config get/set/remove/list` | Read/write config (dot-path keys, sensitive fields masked) |
+| `agent-connect project add/remove/list` | Manage cc-connect projects |
+| `agent-connect agent list [-a] [--json]` | List running agent sessions |
+| `agent-connect agent read <id> [--full]` | Read status + latest reply (read-only, no pollution) |
+| `agent-connect agent send <id> "<text>"` | Inject an instruction into a tmux session |
+| `agent-connect agent takeover <id> [--force]` | Adopt a non-tmux session (kill + resume in tmux) |
+| `agent-connect agent run ["<prompt>"] [-w dir]` | Spawn a new remote-controllable session in tmux |
 
 ---
 
@@ -131,7 +131,7 @@ Replies are sent as **Markdown** (tables, bold, code blocks, emoji status), so t
 
 | Dependency | Purpose | Link |
 |------------|---------|------|
-| **Node.js ≥ 18** | Runs the `cc-router` CLI and `serve` daemon | https://nodejs.org |
+| **Node.js ≥ 18** | Runs the `agent-connect` CLI and `serve` daemon | https://nodejs.org |
 | **cc-connect** | Gateway; forwards DingTalk to the messenger via `acp` | https://github.com/chenhg5/cc-connect |
 | **OpenAI-compatible LLM** | The messenger's model (`base_url` + `api_key` + `model`) | self-hosted gateway / proxy |
 | **tmux** | Needed for the write plane; reads don't need it | `brew install tmux` |
@@ -163,15 +163,15 @@ MIT
 ---
 ---
 
-# 🤖 cc-connect-router (简体中文)
+# 🤖 agent-connect (简体中文)
 
-[English](#-cc-connect-router) | **简体中文**
+[English](#-agent-connect) | **简体中文**
 
 > 从手机（钉钉）监控并控制本机上运行的**多个** coding agent 会话（Claude Code / qodercli）：**读写分离 · 一对多 · 信使 Agent 做意图分派 · 写操作人工确认。**
 
 📖 **使用介绍网站：** https://xinyuehtx.github.io/connect/
 
-在钉钉里发一句话，就能查看本机所有 agent 任务的状态、只读拉取结果、并把后续指令注入到指定的那个任务。一个轻量的**信使 Agent**（Vercel AI SDK，可配置任意 OpenAI 兼容模型）理解你的意图、决定读还是写、定位到哪个会话；任何变更 worker 会话的操作都要你**确认**后才执行。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 做钉钉 ↔ 本地的消息传输，配套 `cc-router serve` 提供 Web 控制台。
+在钉钉里发一句话，就能查看本机所有 agent 任务的状态、只读拉取结果、并把后续指令注入到指定的那个任务。一个轻量的**信使 Agent**（Vercel AI SDK，可配置任意 OpenAI 兼容模型）理解你的意图、决定读还是写、定位到哪个会话；任何变更 worker 会话的操作都要你**确认**后才执行。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 做钉钉 ↔ 本地的消息传输，配套 `agent-connect serve` 提供 Web 控制台。
 
 ---
 
@@ -181,10 +181,10 @@ MIT
 
 - **信使 Agent（寻址分派，非重路由）**：用 AI SDK 实现、与 Claude Code 解耦。它只判断「读还是写 / 哪个会话 / 哪个动词」，用工具调用控制面；**任务本身仍由 worker agent 执行**。信使自己一个独立会话上下文（Web 与钉钉共享），**永不进入 worker 会话的上下文**——这正是读写分离在自然语言输入下的守门人。
 - **读写双平面**：读（list/read）只读 Claude Code 落盘的 sessions 注册表与 transcript，零副作用、不碰 worker 进程；写（send/takeover/run）经 tmux，且必须经**「提议 → 人工确认 → 执行」**安全闸。
-- **通信**：继续用 cc-connect。因 cc-connect 只能通过 `acp` agent 类型接入自定义程序，信使以一个 **ACP 薄桥**（`cc-router acp`）作为它的 agent，把消息转发给 `cc-router serve` 守护。
+- **通信**：继续用 cc-connect。因 cc-connect 只能通过 `acp` agent 类型接入自定义程序，信使以一个 **ACP 薄桥**（`agent-connect acp`）作为它的 agent，把消息转发给 `agent-connect serve` 守护。
 
 ```
-钉钉 ─Stream─► cc-connect ─exec─► cc-router acp（薄桥）─HTTP─► cc-router serve（守护）
+钉钉 ─Stream─► cc-connect ─exec─► agent-connect acp（薄桥）─HTTP─► agent-connect serve（守护）
                                                                   │
    ┌──────────────────────────────────────────────────────────┐ │
    │  Web 控制台 + SSE + 配置页        闸门(白名单/前缀/确认词)   │◄┘
@@ -204,36 +204,36 @@ MIT
 ## 📦 安装
 
 ```bash
-npm install -g @tengxiaohtx/connect
+npm install -g @tengxiaohtx/agent-connect
 ```
 
 ## 🚀 快速开始
 
 ```bash
-# 1. 初始化配置（生成 ~/.cc-connect-router/config.toml）
-cc-router init
+# 1. 初始化配置（生成 ~/.agent-connect/config.toml）
+agent-connect init
 
 # 2. 启动 Web 控制台守护（首次会打印访问令牌）
-cc-router serve
+agent-connect serve
 #   浏览器打开 http://127.0.0.1:8787 → 用打印出的令牌登录
 #   设置 → LLM Provider：填 base_url / api_key / model（任意 OpenAI 兼容端点）
 #   设置 → IM 连接器：填钉钉 client_id / client_secret + 闸门（前缀 / 白名单）
 
 # 3. 另开一个终端，拉起 cc-connect（钉钉 ↔ 本地）
-cc-router start
+agent-connect start
 ```
 
 也可以全用 CLI 配置（等价于 Web 配置页）：
 
 ```bash
-cc-router config set messenger.base_url "https://your-gateway/v1"
-cc-router config set messenger.api_key  "sk-..."
-cc-router config set messenger.model    "gpt-4o-mini"
-cc-router config set projects.0.platforms.0.options.client_id     "your-dingtalk-client-id"
-cc-router config set projects.0.platforms.0.options.client_secret "your-dingtalk-client-secret"
+agent-connect config set messenger.base_url "https://your-gateway/v1"
+agent-connect config set messenger.api_key  "sk-..."
+agent-connect config set messenger.model    "gpt-4o-mini"
+agent-connect config set projects.0.platforms.0.options.client_id     "your-dingtalk-client-id"
+agent-connect config set projects.0.platforms.0.options.client_secret "your-dingtalk-client-secret"
 ```
 
-钉钉凭证 `client_id` / `client_secret` 需在[钉钉开放平台](https://open.dingtalk.com)创建**企业内部应用**（或机器人应用），并启用 **Stream 模式**。默认配置已把信使接成 cc-connect 的 `acp` agent（`cmd = "cc-router"`, `args = ["acp"]`），无需手改。
+钉钉凭证 `client_id` / `client_secret` 需在[钉钉开放平台](https://open.dingtalk.com)创建**企业内部应用**（或机器人应用），并启用 **Stream 模式**。默认配置已把信使接成 cc-connect 的 `acp` agent（`cmd = "agent-connect"`, `args = ["acp"]`），无需手改。
 
 > 钉钉里默认要带前缀 `/ai` 才会路由给信使（如 `/ai 列出会话`）；待确认时直接回「确认 / 取消」。前缀可改或留空（留空 = 处理所有消息）。
 
@@ -252,10 +252,10 @@ LLM 用 Vercel AI SDK，首批支持 **OpenAI-compatible**（`base_url` + `api_k
 
 ## 🌐 支持任意 IM（不止钉钉）
 
-cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、Discord、企业微信、QQ、LINE…），而我们的信使以**平台无关**的 `acp` agent 接入，所以 cc-connect-router 对**任意平台**都适用。ACP 薄桥从 `CC_SESSION_KEY` 解析出平台名，套用对应闸门。
+cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、Discord、企业微信、QQ、LINE…），而我们的信使以**平台无关**的 `acp` agent 接入，所以 agent-connect 对**任意平台**都适用。ACP 薄桥从 `CC_SESSION_KEY` 解析出平台名，套用对应闸门。
 
 接入一个新 IM：
-1. 在 `~/.cc-connect-router/config.toml` 的 cc-connect 部分配好该平台（它自己的 `[[projects.platforms]]` + 凭证，见 cc-connect 文档）。
+1. 在 `~/.agent-connect/config.toml` 的 cc-connect 部分配好该平台（它自己的 `[[projects.platforms]]` + 凭证，见 cc-connect 文档）。
 2. （可选）给它加一段闸门：`[im.platforms.<平台名>]`，含 `enabled` / `command_prefix` / `allowed_sender_ids` / 确认词。不配则用默认（启用、空白名单=允许所有）。
 
 信使、读写平面、确认闸在所有平台完全一致，只有传输层不同。
@@ -278,17 +278,17 @@ cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、D
 
 | 命令 | 说明 |
 |------|------|
-| `cc-router init [--force]` | 初始化配置目录与默认配置（`--force` 覆盖） |
-| `cc-router serve [-H host] [-p port]` | 启动 Web 控制台 + 信使守护（读写平面 + 安全闸；首启打印令牌） |
-| `cc-router acp` | ACP 薄桥，供 cc-connect 拉起（勿手动运行） |
-| `cc-router start` | 启动 cc-connect（钉钉 ↔ 本地 消息传输） |
-| `cc-router config get/set/remove/list` | 读写配置（点号路径，敏感字段遮掩） |
-| `cc-router project add/remove/list` | 管理 cc-connect 项目 |
-| `cc-router agent list [-a] [--json]` | 列出运行中的 agent 会话 |
-| `cc-router agent read <id> [--full]` | 只读查看状态与最新回复（不污染上下文） |
-| `cc-router agent send <id> "<text>"` | 向 tmux 会话注入指令 |
-| `cc-router agent takeover <id> [--force]` | 接管非 tmux 会话（kill + resume 进 tmux） |
-| `cc-router agent run ["<prompt>"] [-w dir]` | 在 tmux 中新建可远控会话 |
+| `agent-connect init [--force]` | 初始化配置目录与默认配置（`--force` 覆盖） |
+| `agent-connect serve [-H host] [-p port]` | 启动 Web 控制台 + 信使守护（读写平面 + 安全闸；首启打印令牌） |
+| `agent-connect acp` | ACP 薄桥，供 cc-connect 拉起（勿手动运行） |
+| `agent-connect start` | 启动 cc-connect（钉钉 ↔ 本地 消息传输） |
+| `agent-connect config get/set/remove/list` | 读写配置（点号路径，敏感字段遮掩） |
+| `agent-connect project add/remove/list` | 管理 cc-connect 项目 |
+| `agent-connect agent list [-a] [--json]` | 列出运行中的 agent 会话 |
+| `agent-connect agent read <id> [--full]` | 只读查看状态与最新回复（不污染上下文） |
+| `agent-connect agent send <id> "<text>"` | 向 tmux 会话注入指令 |
+| `agent-connect agent takeover <id> [--force]` | 接管非 tmux 会话（kill + resume 进 tmux） |
+| `agent-connect agent run ["<prompt>"] [-w dir]` | 在 tmux 中新建可远控会话 |
 
 ---
 
@@ -296,7 +296,7 @@ cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、D
 
 | 依赖 | 说明 | 链接 |
 |------|------|------|
-| **Node.js ≥ 18** | 运行 `cc-router` CLI 与 `serve` 守护 | https://nodejs.org |
+| **Node.js ≥ 18** | 运行 `agent-connect` CLI 与 `serve` 守护 | https://nodejs.org |
 | **cc-connect** | 消息网关，把钉钉消息经 `acp` 转发到信使 | https://github.com/chenhg5/cc-connect |
 | **OpenAI 兼容 LLM 端点** | 信使 Agent 的模型（`base_url` + `api_key` + `model`） | 自建网关 / 代理 |
 | **tmux** | 写平面所需；读平面不需要 | `brew install tmux` |

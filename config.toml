@@ -1,6 +1,6 @@
 # ⚠️ 此文件仅供开发参考
-# 生产环境请使用: cc-router init
-# 配置文件位置: ~/.cc-connect-router/config.toml
+# 生产环境请使用: agent-connect init
+# 配置文件位置: ~/.agent-connect/config.toml
 
 [[projects]]
 name = "router"

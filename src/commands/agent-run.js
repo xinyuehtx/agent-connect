@@ -20,7 +20,7 @@ function shellWrap(inner) {
 }
 
 /**
- * cc-router agent run [prompt]
+ * agent-connect agent run [prompt]
  * 显式启动器（arun）：在 tmux 中拉起一个"可远控"的新会话。
  * 预生成 sessionId，故启动即可知其 ID；首条指令走 send 通道注入（与后续一致）。
  * 注意：这是显式命令，不是 PATH 劫持——只有你想让某次任务可远控时才用它。
@@ -81,8 +81,8 @@ async function agentRun(prompt, opts) {
 
   const short = sessionId.slice(0, 8);
   console.log(`\n会话 ID: ${sessionId}`);
-  console.log(`查看: cc-router agent read ${short}`);
-  console.log(`派活: cc-router agent send ${short} "..."`);
+  console.log(`查看: agent-connect agent read ${short}`);
+  console.log(`派活: agent-connect agent send ${short} "..."`);
   console.log(`附加: tmux attach -t ${name}`);
 }
 

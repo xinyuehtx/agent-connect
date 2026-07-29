@@ -36,7 +36,7 @@ function fmtAge(ts) {
 }
 
 /**
- * cc-router agent list
+ * agent-connect agent list
  * 列出运行中的 Agent 会话（一对多看板的数据源）。
  * @param {object} opts
  */
@@ -62,7 +62,7 @@ function agentList(opts) {
     console.log(`${emoji} ${s.name || short}  [${short}]`);
     console.log(`   ${s.tool} · ${proj} · ${channel} · ${s.status} · ${fmtAge(s.updatedAt)} 前`);
   }
-  console.log('\n查看: cc-router agent read <id>   派活: cc-router agent send <id> "..."');
+  console.log('\n查看: agent-connect agent read <id>   派活: agent-connect agent send <id> "..."');
 }
 
 module.exports = agentList;

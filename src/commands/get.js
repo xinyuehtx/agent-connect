@@ -3,7 +3,7 @@
 const { loadConfig, getNestedValue } = require('../lib/config-store');
 
 /**
- * cc-router config get <key>
+ * agent-connect config get <key>
  * 获取指定点号路径的配置值。
  * @param {string} key
  */

@@ -4,7 +4,7 @@ const registry = require('../lib/registry');
 const tmux = require('../lib/tmux');
 
 /**
- * cc-router agent send <sessionId> <text>
+ * agent-connect agent send <sessionId> <text>
  * 写平面：向 tmux 托管的活会话注入指令（这是"带内、刻意"的唯一入口）。
  * 非 tmux 通道需先 takeover。
  * @param {string} sessionId
@@ -29,7 +29,7 @@ function agentSend(sessionId, text, opts) {
     if (s.channel === 'ide') {
       console.error('该会话由 IDE 占用，请在 IDE 内操作。');
     } else {
-      console.error(`先接管：cc-router agent takeover ${short}`);
+      console.error(`先接管：agent-connect agent takeover ${short}`);
     }
     process.exit(1);
   }

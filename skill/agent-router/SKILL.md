@@ -1,18 +1,19 @@
 ---
-name: qoder-router
+name: agent-router
 description: >
-  Routes natural language requests to Qoder CLI for task management.
-  Handles task queries, assignment, status tracking, and execution.
-  Use when receiving messages from DingTalk or other platforms via cc-connect.
+  【历史参考 / LEGACY】早期基于 OpenCode 路由层、直调 Qoder CLI 的任务路由 skill。
+  已被 agent-connect 的「信使 manager 路由器 + 读写平面 + 控制面」取代，仅作历史参考保留。
 version: "1.0.0"
 license: MIT
 compatibility: Requires cc-connect, OpenCode CLI, qodercli in PATH
 metadata:
   author: huangtengxiao
-  tags: [opencode, qoder, dingtalk, task-management, automation]
+  tags: [legacy, opencode, qoder, dingtalk, task-management]
 ---
 
-# Qoder 任务路由器
+> ⚠️ **历史参考**：本 skill 是 agent-connect 早期的路由方案，现已由内置的「信使 manager 路由器」取代（见项目 README）。保留仅供参考。
+
+# Qoder 任务路由器（历史参考）
 
 ## 1. 角色定义
 

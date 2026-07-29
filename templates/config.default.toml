@@ -1,8 +1,8 @@
-# cc-connect-router 配置
-# 生成位置: ~/.cc-connect-router/config.toml
-# 修改方式: cc-router config set <key> <value>  或  Web 控制台配置页
+# agent-connect 配置
+# 生成位置: ~/.agent-connect/config.toml
+# 修改方式: agent-connect config set <key> <value>  或  Web 控制台配置页
 
-# ── Web 控制台（cc-router serve）──
+# ── Web 控制台（agent-connect serve）──
 [web]
 host = "127.0.0.1"
 port = 8787
@@ -52,7 +52,7 @@ type = "acp"
 
 [projects.agent.options]
 work_dir = "~"                   # 信使不依赖 work_dir，占位即可
-cmd = "cc-router"
+cmd = "agent-connect"
 args = ["acp"]
 
 [[projects.platforms]]

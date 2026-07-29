@@ -7,7 +7,7 @@ const VALID_AGENTS = ['opencode', 'qoder'];
 const VALID_PLATFORMS = ['dingtalk'];
 
 /**
- * cc-router project add <name> <work_dir>
+ * agent-connect project add <name> <work_dir>
  * 在 projects 数组中新增一个项目配置块。
  * @param {string} name
  * @param {string} workDir

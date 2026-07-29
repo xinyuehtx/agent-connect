@@ -43,13 +43,13 @@ function maskSensitive(node) {
 }
 
 /**
- * cc-router config list
+ * agent-connect config list
  * 输出完整配置（敏感字段遮掩）。
  */
 function list() {
   const config = loadConfig();
   if (Object.keys(config).length === 0) {
-    console.log('配置为空，请先运行 cc-router init。');
+    console.log('配置为空，请先运行 agent-connect init。');
     return;
   }
   const masked = maskSensitive(config);

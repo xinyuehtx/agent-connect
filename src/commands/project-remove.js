@@ -22,7 +22,7 @@ function confirm(question) {
 }
 
 /**
- * cc-router project remove <name>
+ * agent-connect project remove <name>
  * 从 projects 数组中删除指定名称的项目。
  * @param {string} name
  * @param {{ yes?: boolean }} options

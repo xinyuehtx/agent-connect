@@ -19,6 +19,7 @@ class AgentConductor {
     this.messenger = deps.messenger;
     this.plane = deps.plane;
     this.pending = deps.pending;
+    this.current = deps.current || null; // 「当前会话」指针存储（cwd 机制），可选
     this.clock = deps.clock || { now: () => Date.now() };
     this.confirmWords = deps.confirmWords || ['确认', '确定', 'yes', 'y', 'ok'];
     this.cancelWords = deps.cancelWords || ['取消', 'no', 'n'];
@@ -66,11 +67,18 @@ class AgentConductor {
     }
     if (a.kind === 'takeover') {
       const s = await this.plane.takeover(a.params.sessionId, { force: a.params.force });
-      return `✅ 已接管会话 ${String(s.sessionId || a.params.sessionId).slice(0, 8)}`;
+      const short2 = String(s.sessionId || a.params.sessionId).slice(0, 8);
+      return s.ready
+        ? `✅ 已接管会话 ${short2}，已在 tmux 就绪，可直接发指令。`
+        : `✅ 已接管会话 ${short2}（已在 tmux 中恢复；若未就绪，请稍候用 read 确认）。`;
     }
     if (a.kind === 'run') {
       const s = await this.plane.run({ cwd: a.params.cwd, prompt: a.params.prompt, tool: a.params.tool });
-      return `✅ 已新建会话 ${String(s.sessionId).slice(0, 8)}`;
+      return `✅ 已新建会话 ${String(s.sessionId).slice(0, 8)}${a.params.prompt ? '，已注入首条指令。' : '。'}`;
+    }
+    if (a.kind === 'exit') {
+      const r = await this.plane.exit(a.params.sessionId);
+      return `✅ 已退出会话 ${short}${r.killedTmux ? '（进程与 tmux 窗口均已关闭）' : '（进程已结束）'}。`;
     }
     return '未知动作';
   }
@@ -117,7 +125,16 @@ class AgentConductor {
     }
 
     const stage = (kind, params) => this._stage(conversationKey, kind, params);
-    const reply = await this.messenger.run(conversationKey, text, stage, ctx);
+    // 注入「当前会话」(cwd) 到 ctx，供信使工具默认目标与切换
+    const fullCtx = { ...(ctx || {}) };
+    if (this.current) {
+      fullCtx.currentSessionId = this.current.get(conversationKey);
+      fullCtx.setCurrent = (id) => {
+        fullCtx.currentSessionId = id || null; // 同一轮内切换后，后续工具即刻可见
+        return id ? this.current.set(conversationKey, id) : this.current.clear(conversationKey);
+      };
+    }
+    const reply = await this.messenger.run(conversationKey, text, stage, fullCtx);
     const staged = this.pending.get(conversationKey);
     if (staged.length > 0) {
       return { kind: 'staged', reply, actions: staged };

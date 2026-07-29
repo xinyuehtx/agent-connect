@@ -3,7 +3,7 @@
 # 默认目标：显示帮助信息
 help:
 	@echo "可用命令："
-	@echo "  make setup         - 初始化配置（cc-router init）"
+	@echo "  make setup         - 初始化配置（agent-connect init）"
 	@echo "  make install       - 安装依赖，设置脚本权限"
 	@echo "  make run           - 启动 cc-connect 服务"
 	@echo "  make test-local    - 本地测试脚本可用性"
@@ -12,9 +12,9 @@ help:
 	@echo "  make npm-publish   - 发布 npm 包（npm publish）"
 	@echo "  make help          - 显示此帮助信息"
 
-# 初始化配置：调用 cc-router init
+# 初始化配置：调用 agent-connect init
 setup:
-	cc-router init
+	agent-connect init
 
 # 安装：设置脚本可执行权限
 install:
@@ -22,11 +22,11 @@ install:
 	@echo "✅ 脚本权限设置完成"
 
 # 启动 cc-connect（前台运行，方便查看日志）
-# 优先使用 ~/.cc-connect-router/config.toml，若不存在则回退到本地 config.toml
+# 优先使用 ~/.agent-connect/config.toml，若不存在则回退到本地 config.toml
 run:
-	@if [ -f "$$HOME/.cc-connect-router/config.toml" ]; then \
-		echo "使用配置: $$HOME/.cc-connect-router/config.toml"; \
-		cc-connect -c "$$HOME/.cc-connect-router/config.toml"; \
+	@if [ -f "$$HOME/.agent-connect/config.toml" ]; then \
+		echo "使用配置: $$HOME/.agent-connect/config.toml"; \
+		cc-connect -c "$$HOME/.agent-connect/config.toml"; \
 	else \
 		echo "使用配置: config.toml（本地开发）"; \
 		cc-connect -c config.toml; \
@@ -56,7 +56,7 @@ check:
 	@which qodercli > /dev/null 2>&1 && echo "✅ qodercli 已安装" || echo "❌ qodercli 未找到"
 	@echo ""
 	@echo "检查配置..."
-	@test -f "$$HOME/.cc-connect-router/config.toml" && echo "✅ ~/.cc-connect-router/config.toml 存在" || echo "ℹ️  ~/.cc-connect-router/config.toml 不存在（可运行 make setup 生成）"
+	@test -f "$$HOME/.agent-connect/config.toml" && echo "✅ ~/.agent-connect/config.toml 存在" || echo "ℹ️  ~/.agent-connect/config.toml 不存在（可运行 make setup 生成）"
 	@test -f config.toml && echo "✅ config.toml（本地）存在" || echo "❌ config.toml 不存在"
 	@test -d scripts && echo "✅ scripts/ 目录存在" || echo "❌ scripts/ 目录不存在"
 	@test -d skill/qoder-router && echo "✅ skill/qoder-router/ 目录存在" || echo "❌ skill/qoder-router/ 目录不存在"

@@ -22,8 +22,8 @@ const agentTakeover = require('../src/commands/agent-takeover');
 const agentRun = require('../src/commands/agent-run');
 
 program
-  .name('cc-router')
-  .description('cc-connect-router 配置管理工具')
+  .name('agent-connect')
+  .description('agent-connect 配置管理工具')
   .version(pkg.version);
 
 // init

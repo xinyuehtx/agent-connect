@@ -25,168 +25,171 @@ function llmErrorMessage(e) {
 }
 
 const SYSTEM_PROMPT = [
-  '你是 cc-connect-router 的「信使」助手：帮用户从聊天里监控与控制本机上其它正在运行的 coding agent 会话（Claude Code / qodercli）。',
+  '你是 agent-connect 的「信使」——一个**任务管理路由器**，不是干活的 agent。你只做「意图识别 + 路由」。',
   '',
-  '工具：',
-  '- 只读：list_sessions（含项目/Agent/状态/最近一条用户输入与回复）、read_session、get_status。',
-  '- 截图/图片：snapshot_session（把某会话终端画面渲染成图片发到聊天）、send_image（发送本机图片文件）。',
-  '- 变更（需确认）：propose_send / propose_takeover / propose_run —— 只提议，用户「确认」后才执行。',
+  '你维护一个「当前会话」指针（像 shell 的 cwd）。核心意图只有这几类：',
+  '1) 切换当前会话：switch_current（把 cwd 指向某会话）。',
+  '2) 列出全部任务：list_sessions。',
+  '3) 转发消息：propose_forward（把用户的指令转发注入到当前/指定会话）——用户给普通指令（如「继续」「改用方案B」）且已设当前会话时，就用它。',
+  '4) 读取回复：read_reply（读当前/指定会话的最新回复）。',
+  '5) 接管：propose_takeover；6) 退出关闭：propose_exit；7) 新建：propose_run；截图：snapshot_session。',
   '',
-  '铁律：任何对 worker 会话的变更（注入 / 接管 / 新建）都只能通过 propose_* 工具提议，绝不要声称已经执行。',
+  '**真正的任务由目标 worker 会话执行**——你只负责把消息路由过去，绝不自己写代码/分步骤替它做事、也不长篇推理。',
+  '铁律：对 worker 的任何变更（转发/接管/退出/新建）只能走 propose_*，绝不声称已执行。',
+  '当前会话可能失效：若工具返回 stale 提示，请如实转达并建议用户重新 switch_current，不要继续在失效会话上操作。',
   '',
-  '输出格式（聊天窗口会渲染 Markdown，请让回复美观、不简陋）：',
-  '- 用 **加粗** 标关键项；用 emoji 标状态：✅ 空闲 / 🔄 运行中 / 💀 已退出 / 🧩 IDE。',
-  '- 列多个会话时用 Markdown 表格（状态 / 名称 / 项目 / Agent / 最近输入），或清晰的分条列表。',
-  '- 终端输出、命令、代码片段放进 ``` 代码块。',
-  '- 用户想看某会话实时画面时，主动调用 snapshot_session 发一张截图，再配一句总结。',
-  '- 引用会话时展示 8 位短 ID，但调用工具时用完整 sessionId。回复精炼、结构化。',
+  '回复风格：一到几句话说清「我要做什么/结果」。多会话用 Markdown 表格（状态/名称/项目/Agent/最近输入），',
+  'emoji 标状态（✅ 空闲 / 🔄 运行中 / ⏳ 待输入 / 💀 已退出 / 🧩 IDE），当前会话用 📍 标注。展示 8 位短 ID，调用工具用完整 sessionId。',
 ].join('\n');
 
 /**
- * 构造绑定到 ControlPlane 与 stage 回调的工具集。
- * @param {object} deps { plane, stage, tool }
+ * 构造信使（manager 路由器）的工具集。信使维护「当前会话」(ctx.currentSessionId, 类似 cwd)，
+ * 转发/接管/退出/读取默认作用于当前会话。变更类一律走 stage(需确认)。
+ * @param {object} deps { plane, stage, tool, ctx }
  * @returns {object} AI SDK tools
  */
 function buildTools({
   plane, stage, tool, ctx,
 }) {
   const clip = (s, n) => (s && s.length > n ? `${s.slice(0, n)}…` : (s || ''));
+  const cur = () => (ctx && ctx.currentSessionId) || null;
+  const target = (arg) => arg || cur(); // 默认当前会话
+  const noCurrent = { ok: false, note: '没有「当前会话」。请先用 switch_current 切换，或在参数里指定 sessionId。' };
+
+  // 门禁：执行路由命令前校验目标会话仍有效。失效则清空当前指针并提示。
+  const validateTarget = async (arg) => {
+    const explicit = !!arg;
+    const id = target(arg);
+    if (!id) return { note: noCurrent };
+    try {
+      await plane.getSession(id);
+      return { id };
+    } catch (e) {
+      if (!explicit && ctx && ctx.setCurrent) ctx.setCurrent(null); // 清空失效的当前会话
+      return {
+        note: {
+          ok: false,
+          stale: true,
+          note: `⚠️ 会话 ${String(id).slice(0, 8)} 已失效（不存在或已退出）。${explicit ? '' : '当前会话已清空，'}请用 switch_current 重新切换，或指定 sessionId。`,
+        },
+      };
+    }
+  };
+
   return {
     list_sessions: tool({
-      description: '列出本机所有运行中的 agent 会话（含项目、Agent、状态、最近一条用户输入/回复）。',
+      description: '列出本机所有会话（含项目/Agent/状态/最近输入与回复），并标出哪个是当前会话。',
       inputSchema: z.object({}),
       execute: async () => {
         const list = await plane.listSessions({ all: false, activity: true });
+        const current = cur();
         return list.map((s) => ({
           sessionId: s.sessionId,
           short: String(s.sessionId).slice(0, 8),
+          isCurrent: s.sessionId === current,
           name: s.name,
           project: s.cwd ? s.cwd.split('/').slice(-2).join('/') : null,
-          cwd: s.cwd,
           agent: s.tool,
           status: s.status,
-          channel: s.channel,
           controllable: s.controllable,
-          lastUser: clip(s.lastUser, 120),
-          lastReply: clip(s.lastAssistant, 160),
+          lastUser: clip(s.lastUser, 100),
+          lastReply: clip(s.lastAssistant, 140),
         }));
       },
     }),
 
-    read_session: tool({
-      description: '只读查看某会话的状态与最新回复（不会打扰该会话）。',
+    switch_current: tool({
+      description: '切换「当前会话」(类似 cd)：之后的转发/接管/退出/读取默认作用于它。',
       inputSchema: z.object({ sessionId: z.string().describe('完整或前缀 sessionId') }),
       execute: async ({ sessionId }) => {
-        const events = await plane.getMessages(sessionId, { limit: 6 });
-        const lastAssistant = [...events].reverse().find((e) => e.kind === 'assistant' && e.text);
+        let full = sessionId;
+        let name = null;
+        try { const s = await plane.getSession(sessionId); full = s.sessionId; name = s.name; } catch (e) { /* 允许前缀/离线 */ }
+        if (ctx && ctx.setCurrent) ctx.setCurrent(full);
+        return { ok: true, current: String(full).slice(0, 8), note: `当前会话已切到 ${name || String(full).slice(0, 8)}` };
+      },
+    }),
+
+    read_reply: tool({
+      description: '读取会话最新回复与状态（默认当前会话）。用于"它说什么了 / 看回复"。',
+      inputSchema: z.object({ sessionId: z.string().optional() }),
+      execute: async ({ sessionId }) => {
+        const id = target(sessionId);
+        if (!id) return noCurrent;
+        const events = await plane.getMessages(id, { limit: 6 });
+        const last = [...events].reverse().find((e) => e.kind === 'assistant' && e.text);
         let detail = null;
-        try {
-          detail = await plane.getSession(sessionId);
-        } catch (e) { /* 进程可能已退出 */ }
+        try { detail = await plane.getSession(id); } catch (e) { /* 已退出 */ }
         return {
-          sessionId,
+          sessionId: id,
+          short: String(id).slice(0, 8),
+          agent: detail ? detail.tool : null,
           status: detail ? detail.status : '(已退出)',
-          channel: detail ? detail.channel : null,
-          messageCount: detail ? detail.messageCount : events.length,
-          lastAssistant: lastAssistant ? lastAssistant.text.slice(0, 1200) : '(暂无回复)',
+          lastReply: last ? last.text.slice(0, 1200) : '(暂无回复)',
         };
       },
     }),
 
-    get_status: tool({
-      description: '快速查询某会话是否可控与忙/闲状态。',
-      inputSchema: z.object({ sessionId: z.string() }),
-      execute: async ({ sessionId }) => {
-        const s = await plane.getSession(sessionId);
-        return { status: s.status, live: s.live, controllable: s.controllable, channel: s.channel };
-      },
-    }),
-
     snapshot_session: tool({
-      description: '把某会话的当前终端画面渲染成图片并发到聊天里（可视化"截图"）。仅 tmux 会话可截图；否则退回发送最近文本。',
-      inputSchema: z.object({
-        sessionId: z.string(),
-        caption: z.string().optional().describe('图片说明文字'),
-      }),
+      description: '把会话当前终端画面渲染成图片发到聊天（默认当前会话）。',
+      inputSchema: z.object({ sessionId: z.string().optional(), caption: z.string().optional() }),
       execute: async ({ sessionId, caption }) => {
-        if (!ctx || !ctx.sessionKey) {
-          return { ok: false, note: '当前非 IM 会话，无法发送图片（请在钉钉等聊天里使用）。' };
-        }
+        if (!ctx || !ctx.sessionKey) return { ok: false, note: '当前非 IM 会话，无法发图。' };
+        const id = target(sessionId);
+        if (!id) return noCurrent;
         const { renderTextToImage, sendViaCcConnect } = require('../im/deliver');
-        const cap = await plane.capturePane(sessionId, 200);
+        const cap = await plane.capturePane(id, 200);
         let paneText = cap && cap.text;
-        let title = cap && cap.session ? (cap.session.name || sessionId.slice(0, 8)) : sessionId.slice(0, 8);
+        const title = cap && cap.session ? (cap.session.name || String(id).slice(0, 8)) : String(id).slice(0, 8);
         if (!paneText) {
-          // 非 tmux：用最近 transcript 文本兜底
-          const events = await plane.getMessages(sessionId, { limit: 8 });
-          paneText = events.map((e) => {
-            if (e.kind === 'user') return `> ${e.text}`;
-            if (e.kind === 'assistant') return e.text;
-            if (e.kind === 'tool_result') return `[tool] ${String(e.content).slice(0, 200)}`;
-            return '';
-          }).filter(Boolean).join('\n\n');
+          const events = await plane.getMessages(id, { limit: 8 });
+          paneText = events.map((e) => (e.kind === 'user' ? `> ${e.text}` : (e.kind === 'assistant' ? e.text : ''))).filter(Boolean).join('\n\n');
         }
-        if (!paneText) {
-          return { ok: false, note: '没有可截图的内容。' };
-        }
+        if (!paneText) return { ok: false, note: '没有可截图的内容。' };
         const png = renderTextToImage(paneText, { chromePath: ctx.chromePath, title: `session ${title}` });
-        if (png) {
-          const r = sendViaCcConnect({
-            sessionKey: ctx.sessionKey, project: ctx.project, imagePath: png, message: caption || `📸 ${title} 的当前画面`,
-          });
-          return r.ok ? { ok: true, note: '已发送截图。' } : { ok: false, note: `发送失败: ${r.error}` };
-        }
-        // 无渲染器：以代码块文本兜底发送
-        const r = sendViaCcConnect({
-          sessionKey: ctx.sessionKey, project: ctx.project,
-          message: `${caption || `📸 ${title}`}\n\n\`\`\`\n${paneText.slice(0, 3000)}\n\`\`\``,
-        });
-        return r.ok ? { ok: true, note: '本机无图片渲染器，已改发文本快照。' } : { ok: false, note: `发送失败: ${r.error}` };
+        const msg = caption || `📸 来自 ${title} 的当前画面`;
+        const r = png
+          ? sendViaCcConnect({ sessionKey: ctx.sessionKey, project: ctx.project, imagePath: png, message: msg })
+          : sendViaCcConnect({ sessionKey: ctx.sessionKey, project: ctx.project, message: `${msg}\n\n\`\`\`\n${paneText.slice(0, 3000)}\n\`\`\`` });
+        return r.ok ? { ok: true, note: '已发送截图。' } : { ok: false, note: `发送失败: ${r.error}` };
       },
     }),
 
-    send_image: tool({
-      description: '把本机某张已存在的图片文件发到聊天里（如生成的图表/截图）。',
+    propose_forward: tool({
+      description: '把一条消息/指令转发注入到会话（默认当前会话），需用户确认。用于"信息转发 / 继续 / 让它做X"。',
       inputSchema: z.object({
-        path: z.string().describe('图片绝对路径'),
-        caption: z.string().optional(),
+        text: z.string().describe('要转发给 worker 的消息'),
+        sessionId: z.string().optional().describe('不填则默认当前会话'),
       }),
-      execute: async ({ path: imgPath, caption }) => {
-        if (!ctx || !ctx.sessionKey) {
-          return { ok: false, note: '当前非 IM 会话，无法发送图片。' };
-        }
-        const fs = require('fs');
-        if (!fs.existsSync(imgPath)) {
-          return { ok: false, note: `文件不存在: ${imgPath}` };
-        }
-        const { sendViaCcConnect } = require('../im/deliver');
-        const r = sendViaCcConnect({
-          sessionKey: ctx.sessionKey, project: ctx.project, imagePath: imgPath, message: caption || '',
-        });
-        return r.ok ? { ok: true, note: '已发送图片。' } : { ok: false, note: `发送失败: ${r.error}` };
+      execute: async ({ text, sessionId }) => {
+        const v = await validateTarget(sessionId);
+        if (v.note) return v.note;
+        return stage('send', { sessionId: v.id, text });
       },
-    }),
-
-    propose_send: tool({
-      description: '提议向某会话注入一条指令（需用户确认后执行）。',
-      inputSchema: z.object({
-        sessionId: z.string().describe('目标会话的完整 sessionId'),
-        text: z.string().describe('要注入的指令文本'),
-      }),
-      execute: async ({ sessionId, text }) => stage('send', { sessionId, text }),
     }),
 
     propose_takeover: tool({
-      description: '提议接管一个非 tmux 会话（kill 原进程 + 在 tmux 中 resume），需用户确认。',
-      inputSchema: z.object({
-        sessionId: z.string(),
-        force: z.boolean().optional().describe('busy 时是否强制接管'),
-      }),
-      execute: async ({ sessionId, force }) => stage('takeover', { sessionId, force: !!force }),
+      description: '提议接管会话（kill 原进程 + 在 tmux 中 resume），默认当前会话，需确认。',
+      inputSchema: z.object({ sessionId: z.string().optional(), force: z.boolean().optional() }),
+      execute: async ({ sessionId, force }) => {
+        const v = await validateTarget(sessionId);
+        if (v.note) return v.note;
+        return stage('takeover', { sessionId: v.id, force: !!force });
+      },
+    }),
+
+    propose_exit: tool({
+      description: '提议退出并关闭会话：结束进程并关闭其 tmux 窗口，默认当前会话，需确认。',
+      inputSchema: z.object({ sessionId: z.string().optional() }),
+      execute: async ({ sessionId }) => {
+        const v = await validateTarget(sessionId);
+        if (v.note) return v.note;
+        return stage('exit', { sessionId: v.id });
+      },
     }),
 
     propose_run: tool({
-      description: '提议在 tmux 中新建一个可远控会话，需用户确认。',
+      description: '提议在 tmux 中新建一个可远控会话（新任务），需确认。',
       inputSchema: z.object({
         cwd: z.string().describe('工作目录（绝对路径）'),
         prompt: z.string().optional().describe('首条指令'),
@@ -196,6 +199,9 @@ function buildTools({
     }),
   };
 }
+
+// 信使只保留很短的对话窗口（寻址分派不需要长期上下文）
+const HISTORY_WINDOW = 8;
 
 /**
  * 信使 Agent：用 AI SDK 跑一轮多步工具调用，产出回复（并可能暂存变更动作）。
@@ -225,7 +231,8 @@ class Messenger {
       plane: this.plane, stage, tool, ctx,
     });
 
-    const history = this.historyStore.get(conversationKey);
+    // 只带最近很短的窗口：信使是分派器，不需要长期累积上下文（避免变成"主 loop"）
+    const history = this.historyStore.get(conversationKey).slice(-HISTORY_WINDOW);
     const messages = [...history, { role: 'user', content: userText }];
 
     let result;
@@ -235,7 +242,7 @@ class Messenger {
         system: SYSTEM_PROMPT,
         messages,
         tools,
-        stopWhen: stepCountIs(cfg.max_steps || 8),
+        stopWhen: stepCountIs(cfg.max_steps || 4),
       });
     } catch (e) {
       // 抛出带真实原因的错误（限流/鉴权/模型权限等），避免上层只拿到空串
@@ -244,7 +251,8 @@ class Messenger {
       throw err;
     }
 
-    const updated = [...messages, ...result.response.messages];
+    // 持久化时也只保留最近窗口，避免历史无限增长
+    const updated = [...messages, ...result.response.messages].slice(-(HISTORY_WINDOW * 3));
     this.historyStore.set(conversationKey, updated);
     return result.text || '(信使无文本回复)';
   }

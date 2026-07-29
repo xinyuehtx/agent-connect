@@ -93,6 +93,55 @@ test('describeAction renders send/takeover/run', () => {
   assert.match(describeAction('send', { sessionId: 'abcd1234-x', text: 'go' }), /向会话 abcd1234 发送: go/);
   assert.match(describeAction('takeover', { sessionId: 'abcd1234-x', force: true }), /接管会话 abcd1234（强制）/);
   assert.match(describeAction('run', { cwd: '/x', prompt: 'test' }), /在 \/x 新建会话，首条: test/);
+  assert.match(describeAction('exit', { sessionId: 'abcd1234-x' }), /退出并关闭会话 abcd1234/);
+});
+
+test('FileCurrentStore get/set/clear (cwd pointer)', () => {
+  const { FileCurrentStore } = require('../src/lib/messenger/current-store');
+  const store = new FileCurrentStore(tmpFile('cur.json'));
+  assert.strictEqual(store.get('k'), null);
+  store.set('k', 'sid-123');
+  assert.strictEqual(store.get('k'), 'sid-123');
+  store.clear('k');
+  assert.strictEqual(store.get('k'), null);
+});
+
+test('messenger tools: switch_current + forward-defaults-to-current + stale gate', async () => {
+  const { buildTools } = require('../src/lib/messenger/agent');
+  const staged = [];
+  const stage = (kind, params) => { staged.push({ kind, params }); return { staged: true, description: 'x' }; };
+  const plane = {
+    getSession: async (id) => {
+      if (String(id).startsWith('aaaa')) return { sessionId: 'aaaa1111-full', name: 'A', tool: 'claude', status: 'idle' };
+      throw new Error('not found');
+    },
+    listSessions: async () => [],
+    getMessages: async () => [],
+  };
+  const ctx = { currentSessionId: null, setCurrent(id) { this.currentSessionId = id || null; } };
+  const tools = buildTools({ plane, stage, tool: (d) => d, ctx });
+
+  // no current yet → forward returns "no current"
+  const noCur = await tools.propose_forward.execute({ text: 'go' });
+  assert.strictEqual(noCur.ok, false);
+  assert.match(noCur.note, /没有「当前会话」/);
+
+  // switch sets current (resolves full id)
+  const sw = await tools.switch_current.execute({ sessionId: 'aaaa1111' });
+  assert.strictEqual(sw.ok, true);
+  assert.strictEqual(ctx.currentSessionId, 'aaaa1111-full');
+
+  // forward now defaults to current
+  const fwd = await tools.propose_forward.execute({ text: '继续' });
+  assert.strictEqual(fwd.staged, true);
+  assert.deepStrictEqual(staged.at(-1), { kind: 'send', params: { sessionId: 'aaaa1111-full', text: '继续' } });
+
+  // current goes stale → gate clears it and warns
+  ctx.currentSessionId = 'zzzz9999-gone';
+  const stale = await tools.propose_forward.execute({ text: 'x' });
+  assert.strictEqual(stale.ok, false);
+  assert.strictEqual(stale.stale, true);
+  assert.strictEqual(ctx.currentSessionId, null); // cleared
 });
 
 /* ---------------- pending / history stores ---------------- */

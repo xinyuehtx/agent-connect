@@ -3,12 +3,52 @@
 const fs = require('fs');
 const path = require('path');
 const TOML = require('@iarna/toml');
-const { CONFIG_DIR, CONFIG_FILE, CONFIG_BACKUP_DIR } = require('./paths');
+const {
+  CONFIG_DIR, CONFIG_FILE, CONFIG_BACKUP_DIR, LEGACY_CONFIG_DIR,
+} = require('./paths');
+
+let migrated = false;
+
+/**
+ * 一次性把旧目录 ~/.cc-connect-router 迁移到新目录 ~/.agent-connect。
+ * 仅当新目录尚无 config.toml 且旧目录存在时执行（幂等）。
+ */
+function migrateLegacyDir() {
+  if (migrated) {
+    return;
+  }
+  migrated = true;
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return;
+    }
+    if (CONFIG_DIR === LEGACY_CONFIG_DIR) {
+      return;
+    }
+    if (!fs.existsSync(path.join(LEGACY_CONFIG_DIR, 'config.toml'))) {
+      return;
+    }
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.cpSync(LEGACY_CONFIG_DIR, CONFIG_DIR, { recursive: true });
+    // 旧配置里 acp agent 的 cmd 是 "cc-router"，改成新 bin 名
+    try {
+      const c = fs.readFileSync(CONFIG_FILE, 'utf8');
+      if (c.includes('cc-router')) {
+        fs.writeFileSync(CONFIG_FILE, c.replace(/cc-router/g, 'agent-connect'));
+      }
+    } catch (e) { /* ignore */ }
+    // eslint-disable-next-line no-console
+    console.log(`[agent-connect] 已从旧目录迁移配置: ${LEGACY_CONFIG_DIR} → ${CONFIG_DIR}`);
+  } catch (e) {
+    // 迁移失败不致命
+  }
+}
 
 /**
  * 确保配置目录存在（含备份目录）。
  */
 function ensureConfigDir() {
+  migrateLegacyDir();
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
@@ -23,6 +63,7 @@ function ensureConfigDir() {
  * @returns {object}
  */
 function loadConfig() {
+  migrateLegacyDir();
   if (!fs.existsSync(CONFIG_FILE)) {
     return {};
   }
@@ -124,6 +165,7 @@ function deleteNestedValue(obj, keyPath) {
 
 module.exports = {
   ensureConfigDir,
+  migrateLegacyDir,
   loadConfig,
   backupConfig,
   saveConfig,

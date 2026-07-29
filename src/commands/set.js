@@ -17,7 +17,7 @@ function inferType(raw) {
 }
 
 /**
- * cc-router config set <key> <value>
+ * agent-connect config set <key> <value>
  * 设置指定点号路径的配置值（自动类型推断）。
  * @param {string} key
  * @param {string} value

@@ -3,8 +3,12 @@
 const os = require('os');
 const path = require('path');
 
-const CONFIG_DIR = process.env.CC_ROUTER_CONFIG_DIR
-  || path.join(os.homedir(), '.cc-connect-router');
+// 旧目录（cc-connect-router 时代），用于一次性自动迁移
+const LEGACY_CONFIG_DIR = path.join(os.homedir(), '.cc-connect-router');
+
+const CONFIG_DIR = process.env.AGENT_CONNECT_CONFIG_DIR
+  || process.env.CC_ROUTER_CONFIG_DIR // 向后兼容旧环境变量
+  || path.join(os.homedir(), '.agent-connect');
 
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.toml');
 const CONFIG_BACKUP_DIR = path.join(CONFIG_DIR, 'backups');
@@ -13,4 +17,5 @@ module.exports = {
   CONFIG_DIR,
   CONFIG_FILE,
   CONFIG_BACKUP_DIR,
+  LEGACY_CONFIG_DIR,
 };

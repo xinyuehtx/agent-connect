@@ -18,6 +18,9 @@ function describeAction(kind, params = {}) {
     const at = params.cwd || '(当前目录)';
     return `在 ${at} 新建会话${params.prompt ? `，首条: ${params.prompt}` : ''}`;
   }
+  if (kind === 'exit') {
+    return `退出并关闭会话 ${short}（结束进程 + 关闭 tmux 窗口）`;
+  }
   return String(kind);
 }
 

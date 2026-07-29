@@ -136,6 +136,7 @@ function registerRoutes(app, deps) {
     return { ok: true };
   }, 202));
   app.post('/api/sessions/:id/takeover', (req, reply) => wrap(reply, () => plane.takeover(req.params.id, { force: (req.body || {}).force })));
+  app.post('/api/sessions/:id/exit', (req, reply) => wrap(reply, () => plane.exit(req.params.id)));
   app.post('/api/sessions', (req, reply) => wrap(reply, () => plane.run(req.body || {}), 201));
 
   // ---- SSE ----
@@ -158,6 +159,7 @@ function registerRoutes(app, deps) {
     app.post('/api/agent/message', (req, reply) => wrap(reply, () => agent.conductor.handle(agent.conversationKey, (req.body || {}).text)));
     app.get('/api/agent/pending', (_req, reply) => wrap(reply, async () => agent.pending.get(agent.conversationKey)));
     app.get('/api/agent/messages', (_req, reply) => wrap(reply, async () => historyToEvents(agent.historyStore.get(agent.conversationKey))));
+    app.get('/api/agent/current', (_req, reply) => wrap(reply, async () => ({ sessionId: agent.current ? agent.current.get(agent.conversationKey) : null })));
   } else {
     app.get('/api/agent/enabled', (_req, reply) => reply.send({ enabled: false }));
   }
@@ -222,7 +224,7 @@ function registerRoutes(app, deps) {
       const result = await agent.conductor.handle(agent.conversationKey, routed, ctx);
       return reply.send({ reply: formatResult(result), kind: result.kind });
     } catch (e) {
-      console.error('[cc-router] /im/handle error:', e && e.message);
+      console.error('[agent-connect] /im/handle error:', e && e.message);
       return reply.send({ reply: `处理出错: ${(e && e.message) || e}` });
     }
   });

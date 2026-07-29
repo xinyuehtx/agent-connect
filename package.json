@@ -1,10 +1,11 @@
 {
-  "name": "@tengxiaohtx/connect",
+  "name": "@tengxiaohtx/agent-connect",
   "version": "1.2.7",
-  "description": "CLI tool for managing cc-connect-router configuration",
+  "description": "agent-connect — 从手机(钉钉/飞书/…)监控与控制本机多个 coding agent 会话：读写分离、信使寻址分派、写操作人工确认、Web 看板",
   "type": "commonjs",
   "bin": {
-    "cc-router": "./bin/cli.js"
+    "agent-connect": "./bin/cli.js",
+    "ac": "./bin/cli.js"
   },
   "main": "./src/index.js",
   "files": [
@@ -21,9 +22,9 @@
     "release:major": "npm version major"
   },
   "keywords": [
+    "agent-connect",
     "cc-connect",
-    "opencode",
-    "qoder",
+    "claude-code",
     "dingtalk",
     "cli"
   ],

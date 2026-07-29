@@ -95,7 +95,7 @@ function toEvent(o) {
 class ControlPlane extends EventEmitter {
   constructor(opts = {}) {
     super();
-    this.pollIntervalMs = opts.pollIntervalMs || 2500;
+    this.pollIntervalMs = opts.pollIntervalMs || 1200;
     this._lastSeen = new Set();
     this._emitted = new Map(); // sessionId -> Set<uuid>
     this._timer = null;
@@ -256,10 +256,47 @@ class ControlPlane extends EventEmitter {
     if (r.status !== 0) {
       throw new Error(`启动 tmux 会话失败：${(r.stderr || '').trim()}`);
     }
-    await this._awaitTranscript(adapter, s.cwd, s.sessionId);
+    const ready = await this._awaitTranscript(adapter, s.cwd, s.sessionId);
 
     const updated = registry.find(s.sessionId);
-    return updated ? toSummary(updated) : { sessionId: s.sessionId, tmuxSession: name };
+    const summary = updated ? toSummary(updated) : { sessionId: s.sessionId };
+    return { ...summary, tmuxSession: name, ready };
+  }
+
+  /**
+   * 退出并关闭会话：结束 agent 进程 + 关闭其 tmux 窗口（不只是退出 claude 进程）。
+   * @param {string} id
+   * @returns {Promise<{ok:true, sessionId:string, killedTmux:boolean}>}
+   */
+  async exit(id) {
+    const s = registry.find(id);
+    if (!s) {
+      throw new NotFoundError(`会话不存在: ${id}`);
+    }
+    // 1) 结束 agent 进程
+    if (s.alive && s.pid) {
+      proc.killPid(s.pid, 'SIGTERM');
+      for (let i = 0; i < 10 && proc.isAlive(s.pid); i += 1) {
+        await sleep(200);
+      }
+      if (proc.isAlive(s.pid)) {
+        proc.killPid(s.pid, 'SIGKILL');
+      }
+    }
+    // 2) 关闭 tmux 窗口（我们托管的命名会话，或命中的 target）
+    let killedTmux = false;
+    if (tmux.isInstalled()) {
+      const name = registry.tmuxName(s.tool, s.sessionId);
+      if (tmux.hasSession(name)) {
+        tmux.killSession(name);
+        killedTmux = true;
+      }
+      if (s.channel === 'tmux' && s.target && s.target !== name && tmux.hasSession(s.target)) {
+        tmux.killSession(s.target);
+        killedTmux = true;
+      }
+    }
+    return { ok: true, sessionId: s.sessionId, killedTmux };
   }
 
   /**
@@ -386,10 +423,11 @@ class ControlPlane extends EventEmitter {
     while (Date.now() < deadline) {
       const file = adapter.transcriptPath(cwd, sessionId);
       if (file && fs.existsSync(file)) {
-        return;
+        return true;
       }
       await sleep(300);
     }
+    return false;
   }
 }
 

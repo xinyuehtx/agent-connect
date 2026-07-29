@@ -11,6 +11,7 @@ const { SseHub } = require('../server/sse');
 const { buildHttp } = require('../server/http');
 const { FilePendingStore } = require('../lib/messenger/pending-store');
 const { FileHistoryStore } = require('../lib/messenger/history-store');
+const { FileCurrentStore } = require('../lib/messenger/current-store');
 const { Messenger } = require('../lib/messenger/agent');
 const { AgentConductor } = require('../lib/messenger/conductor');
 const { classifyMessage } = require('../lib/im/gate');
@@ -27,12 +28,12 @@ function resolveToken(app) {
 }
 
 /**
- * cc-router serve
+ * agent-connect serve
  * 启动守护：Web 控制台 + 控制面 + 信使栈 + /im/handle 闸门。
  * @param {object} [opts] { host, port }
  */
 async function serve(opts = {}) {
-  process.on('unhandledRejection', (e) => console.error('[cc-router] unhandledRejection:', e && e.message));
+  process.on('unhandledRejection', (e) => console.error('[agent-connect] unhandledRejection:', e && e.message));
 
   const app = loadAppConfig();
   const token = resolveToken(app);
@@ -51,6 +52,7 @@ async function serve(opts = {}) {
 
   const pending = new FilePendingStore(path.join(CONFIG_DIR, 'pending.json'));
   const historyStore = new FileHistoryStore(path.join(CONFIG_DIR, 'history.json'));
+  const currentStore = new FileCurrentStore(path.join(CONFIG_DIR, 'current.json'));
   // 每轮实时读 messenger 配置：CLI/文件/Web 改动都即时生效，无需重启
   const messenger = new Messenger({ plane, getCfg: () => loadAppConfig().messenger, historyStore });
   const conversationKey = messengerCfg.conversation_key || 'messenger';
@@ -58,11 +60,12 @@ async function serve(opts = {}) {
     messenger,
     plane,
     pending,
+    current: currentStore,
     // 实时读取闸门配置：Web 配置页改确认词/超时后立即生效，无需重启
     confirmTtlMs: () => gateFor(loadConfig(), 'dingtalk').confirm_ttl_ms,
     confirmWords: () => gateFor(loadConfig(), 'dingtalk').confirm_words,
     cancelWords: () => gateFor(loadConfig(), 'dingtalk').cancel_words,
-    onExecute: (a, ok) => console.log(`[cc-router] execute ${a.kind} ok=${ok}`),
+    onExecute: (a, ok) => console.log(`[agent-connect] execute ${a.kind} ok=${ok}`),
   });
 
   // 配置 API（Web 配置页用）
@@ -139,7 +142,7 @@ async function serve(opts = {}) {
     token,
     sse,
     agent: {
-      conductor, pending, historyStore, conversationKey,
+      conductor, pending, historyStore, conversationKey, current: currentStore,
     },
     config,
     classify,
@@ -159,17 +162,17 @@ async function serve(opts = {}) {
   notifier.start();
 
   const v = validateProviderConfig(messengerCfg);
-  console.log(`[cc-router] 控制台已启动: http://${host}:${port}${token ? '' : '  (开放模式 · 仅本机)'}`);
+  console.log(`[agent-connect] 控制台已启动: http://${host}:${port}${token ? '' : '  (开放模式 · 仅本机)'}`);
   if (!v.ok) {
-    console.log(`[cc-router] ⚠ 信使 LLM 未就绪（${v.reason}）——请在控制台「设置 → LLM Provider」中配置。`);
+    console.log(`[agent-connect] ⚠ 信使 LLM 未就绪（${v.reason}）——请在控制台「设置 → LLM Provider」中配置。`);
   }
   if (app.notify.enabled) {
-    console.log(`[cc-router] 主动通知已开启（needs-confirm / task-done，scope=${app.notify.scope}）`);
+    console.log(`[agent-connect] 主动通知已开启（needs-confirm / task-done，scope=${app.notify.scope}）`);
   }
-  console.log(`[cc-router] 配置文件: ${CONFIG_FILE}`);
+  console.log(`[agent-connect] 配置文件: ${CONFIG_FILE}`);
 
   const shutdown = async (sig) => {
-    console.log(`\n[cc-router] ${sig}，正在关闭…`);
+    console.log(`\n[agent-connect] ${sig}，正在关闭…`);
     try { notifier.stop(); await plane.stop(); await server.close(); } catch (e) { /* ignore */ }
     process.exit(0);
   };

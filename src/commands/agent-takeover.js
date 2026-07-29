@@ -21,7 +21,7 @@ function shellWrap(inner) {
 }
 
 /**
- * cc-router agent takeover <sessionId>
+ * agent-connect agent takeover <sessionId>
  * 接管非 tmux 会话：kill 原进程（若在跑）后在 tmux 中 resume，之后即可用 send 注入。
  * @param {string} sessionId
  * @param {object} opts
@@ -93,7 +93,7 @@ async function agentTakeover(sessionId, opts) {
 
   const short = String(s.sessionId).slice(0, 8);
   console.log(`已接管到 tmux 会话「${name}」。`);
-  console.log(`派活: cc-router agent send ${short} "下一步指令"`);
+  console.log(`派活: agent-connect agent send ${short} "下一步指令"`);
   console.log(`附加: tmux attach -t ${name}`);
 }
 

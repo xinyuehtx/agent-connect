@@ -17,7 +17,7 @@ function truncate(t, n) {
 }
 
 /**
- * cc-router agent read <sessionId>
+ * agent-connect agent read <sessionId>
  * 读平面：只读 transcript，输出状态与最新回复，绝不向会话注入（零上下文污染）。
  * 跨工具（claude / qoder）自动定位。
  * @param {string} sessionId 完整或前缀 ID

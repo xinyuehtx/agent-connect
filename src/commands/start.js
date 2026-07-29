@@ -5,13 +5,13 @@ const { spawn } = require('child_process');
 const { CONFIG_FILE } = require('../lib/paths');
 
 /**
- * cc-router start
+ * agent-connect start
  * 使用当前配置文件在前台启动 cc-connect。
  */
 function start() {
   if (!fs.existsSync(CONFIG_FILE)) {
     console.error(`配置文件不存在: ${CONFIG_FILE}`);
-    console.error('请先运行 cc-router init。');
+    console.error('请先运行 agent-connect init。');
     process.exit(1);
   }
 

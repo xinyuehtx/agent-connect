@@ -22,7 +22,7 @@ function confirm(question) {
 }
 
 /**
- * cc-router config remove <key>
+ * agent-connect config remove <key>
  * 删除指定点号路径的配置值。
  * @param {string} key
  * @param {{ yes?: boolean }} options

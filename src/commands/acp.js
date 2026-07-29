@@ -43,12 +43,12 @@ async function forwardToDaemon(text) {
     }
     return await r.json();
   } catch (e) {
-    return { reply: '信使服务未启动，请先在本机运行 `cc-router serve`。' };
+    return { reply: '信使服务未启动，请先在本机运行 `agent-connect serve`。' };
   }
 }
 
 /**
- * cc-router acp
+ * agent-connect acp
  * 作为 cc-connect 的 acp agent：stdio 上的最小 ACP (JSON-RPC 2.0，行分隔) server。
  * 每条钉钉消息 = 一个 session/prompt，转发给 daemon /im/handle，回复经 session/update 流回。
  */
