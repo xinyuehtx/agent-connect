@@ -80,7 +80,11 @@ The messenger is a **manager router**, not a worker. It only does *intent recogn
 
 **Intents / tools**
 - `switch_current` — set the current session (cwd). `list_sessions` — list all (project / agent / status / latest input).
-- `consult_session` — **read-only consult**: forks the target into a throwaway copy (`--fork-session --permission-mode plan`) and asks *it*; the answer comes from the worker's own context and **never mutates the original**. Used for "why / how to fix / summarize / explain".
+- `consult_session` — **read-only consult**: asks the worker *itself* and **never mutates the original**. Two modes by size:
+  - *small session* → **full-fork** (`--resume --fork-session` + read-only) — accurate, full context.
+  - *large session* → **bounded-excerpt** — feeds a **fresh** agent an excerpt **starting from the latest compaction summary** (`isCompactSummary` / `compact_boundary`) + subsequent messages (falls back to the recent tail if never compacted). Avoids replaying a huge transcript (a 14 MB session went from 90 s+ timeout → ~12 s); answer is labeled *lossy*.
+  - read-only is enforced per agent: Claude `--permission-mode plan`; **qoder `--tools ""`** (disables all tools — stronger than a permission mode; `--yolo` is the opposite and is only used for *control*, never consult). Desktop apps (qwen / qoderwork) have no CLI → consult unsupported (use `read_reply`).
+  - Used for "why / how to fix / summarize / explain".
 - `read_reply` — latest reply of the current session. `snapshot_session` — render its terminal pane to an image.
 - `propose_forward` / `propose_takeover` / `propose_exit` / `propose_run` — **staged**, require your "确认".
 

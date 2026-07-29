@@ -80,7 +80,11 @@ agent-connect config set projects.0.platforms.0.options.client_secret "your-ding
 
 **意图 / 工具**
 - `switch_current` 切换当前会话；`list_sessions` 列出全部（项目/Agent/状态/最近输入）。
-- `consult_session` **只读咨询**：把目标会话 fork 成一次性副本（`--fork-session --permission-mode plan`）去问**它本身**，答案来自 worker 自己的上下文、**绝不改动原会话**。用于「为什么/怎么改/总结/解释」。
+- `consult_session` **只读咨询**：问 worker **它本身**、**绝不改动原会话**。按体量两种模式：
+  - *小会话* → **full-fork**（`--resume --fork-session` + 只读参数）——全量上下文，最准。
+  - *大会话* → **bounded-excerpt**——给一个**全新** agent 喂上下文节选，**从最近一次压缩摘要开始**（`isCompactSummary` / `compact_boundary`）+ 其后消息（从未压缩则回退最近若干条）。避免重放超大历史（14MB 会话从 90s+ 超时 → 约 12s）；回复标注**有损**。
+  - 只读按 agent 保证：Claude 用 `--permission-mode plan`；**qoder 用 `--tools ""`**（禁用所有工具——比权限模式更强；`--yolo` 是其反面，只用于*控制*、绝不用于咨询）。桌面应用（qwen / qoderwork）无 CLI → 不支持咨询（用 `read_reply`）。
+  - 用于「为什么/怎么改/总结/解释」。
 - `read_reply` 看当前会话最新回复；`snapshot_session` 把终端画面渲染成图片。
 - `propose_forward` / `propose_takeover` / `propose_exit` / `propose_run` —— **只暂存**，需你「确认」。
 

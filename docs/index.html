@@ -151,6 +151,10 @@
    <span class="zh">你</span><span class="en">You</span> ──"<span class="zh">按方案改</span><span class="en">apply the fix</span>"──► propose_forward ──<span class="w">确认/confirm</span>──► <b>Worker</b> <span class="zh">执行</span><span class="en">executes</span></pre>
       </div>
       <div class="note" style="margin-top:18px">
+        <span class="zh">🔎 <b>只读咨询策略</b>：小会话 <b>full-fork</b>（`--resume --fork-session`，全量上下文，最准）；大会话 <b>bounded-excerpt</b>——给全新 agent 喂<b>从最近一次压缩摘要开始</b>的节选（避免重放超大历史，14MB 会话 90s+超时 → 约 12s，回复标注有损）。只读按 agent 保证：Claude=`--permission-mode plan`，qoder=`--tools ""`（比权限模式更强；`--yolo` 只用于控制、绝不用于咨询）。</span>
+        <span class="en">🔎 <b>Consult strategy</b>: small sessions use <b>full-fork</b> (`--resume --fork-session`, full context, accurate); large sessions use <b>bounded-excerpt</b> — a fresh agent is fed an excerpt <b>starting from the latest compaction summary</b> (avoids replaying a huge transcript; a 14 MB session went 90 s+ timeout → ~12 s, answer labeled lossy). Read-only per agent: Claude `--permission-mode plan`, qoder `--tools ""` (stronger than a permission mode; `--yolo` is only for control, never consult).</span>
+      </div>
+      <div class="note" style="margin-top:14px">
         <pre style="margin:0;white-space:pre-wrap;font:13px/1.6 ui-monospace,monospace;color:var(--muted)"><span class="zh">你 ▸ 切到 c233caaf
 🧭 信使 ▸ 📍 已切到 agentmon（c233caaf）
 你 ▸ 它最近完成了什么？            # 咨询 → 只读 fork
