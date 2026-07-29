@@ -16,6 +16,7 @@ const { validateProviderConfig } = require('../src/lib/messenger/provider');
 const { llmErrorMessage } = require('../src/lib/messenger/agent');
 const { historyToEvents, mask } = require('../src/server/routes');
 const { toSummary, toEvent } = require('../src/lib/control-plane');
+const { extractResult } = require('../src/lib/control-plane');
 const { gateFor } = require('../src/lib/app-config');
 const { escapeHtml, sendViaCcConnect } = require('../src/lib/im/deliver');
 const { SessionNotifier } = require('../src/lib/notify/watcher');
@@ -398,4 +399,30 @@ test('toEvent maps assistant tool_use and user text', () => {
   const u = toEvent({ type: 'user', uuid: 'u2', message: { content: 'q' } });
   assert.strictEqual(u.kind, 'user');
   assert.strictEqual(u.text, 'q');
+});
+
+test('extractResult: array result event / assistant fallback / single object', () => {
+  assert.strictEqual(extractResult(JSON.stringify([{ type: 'system' }, { type: 'result', result: 'done' }])), 'done');
+  assert.strictEqual(extractResult(JSON.stringify([{ type: 'assistant', message: { content: [{ type: 'text', text: 'hey' }] } }])), 'hey');
+  assert.strictEqual(extractResult(JSON.stringify({ result: 'x' })), 'x');
+  assert.strictEqual(extractResult('not json'), 'not json');
+});
+
+test('consult_session: read-only fork returns attributed answer; stale gate applies', async () => {
+  const { buildTools } = require('../src/lib/messenger/agent');
+  const plane = {
+    getSession: async (id) => { if (String(id).startsWith('aaaa')) return { sessionId: 'aaaa-full', name: 'A', tool: 'claude' }; throw new Error('gone'); },
+    consult: async (id, q) => ({ ok: true, answer: `[fork answer to: ${q}]`, from: { name: 'A', tool: 'claude', short: 'aaaa' } }),
+  };
+  const ctx = { currentSessionId: 'aaaa-full', setCurrent(v) { this.currentSessionId = v || null; } };
+  const tools = buildTools({ plane, stage: () => ({}), tool: (d) => d, ctx });
+  const r = await tools.consult_session.execute({ question: '怎么改' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.mode, 'read-only-fork');
+  assert.match(r.from, /A·claude/);
+  assert.match(r.answer, /fork answer/);
+  // stale current → gated
+  ctx.currentSessionId = 'zzzz-gone';
+  const stale = await tools.consult_session.execute({ question: 'x' });
+  assert.strictEqual(stale.stale, true);
 });

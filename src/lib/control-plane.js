@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const crypto = require('crypto');
+const { execFile } = require('child_process');
 const { EventEmitter } = require('events');
 
 const registry = require('./registry');
@@ -84,6 +85,25 @@ function toEvent(o) {
     return { kind: 'user', uuid: o.uuid, ts, text: textFromContent(content) };
   }
   return { kind: 'meta', uuid: o.uuid, ts, type: String(o.type || 'unknown') };
+}
+
+/**
+ * 解析 `claude -p --output-format json` 输出（可能是事件数组或单对象），提取最终文本。
+ * @param {string} stdout
+ * @returns {string}
+ */
+function extractResult(stdout) {
+  let parsed;
+  try { parsed = JSON.parse(stdout); } catch (e) { return (stdout || '').trim(); }
+  if (Array.isArray(parsed)) {
+    const result = [...parsed].reverse().find((e) => e && e.type === 'result');
+    if (result && result.result) return String(result.result);
+    const asst = [...parsed].reverse().find((e) => e && e.type === 'assistant');
+    const txt = asst && Array.isArray(asst.message && asst.message.content)
+      ? asst.message.content.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : '';
+    return txt || (stdout || '').trim();
+  }
+  return parsed.result || parsed.text || (stdout || '').trim();
 }
 
 /**
@@ -181,6 +201,45 @@ class ControlPlane extends EventEmitter {
       events = events.slice(-opts.limit);
     }
     return events;
+  }
+
+  /**
+   * 只读咨询：fork 目标会话为一个新会话，用 plan（只读）模式提问，答毕即弃。
+   * 绝不修改原会话、也不做任何写操作。用于「问它 / 总结 / 为什么 / 怎么改」类咨询。
+   * @param {string} id
+   * @param {string} question
+   * @param {object} [opts] { timeoutMs }
+   * @returns {Promise<{ok:boolean, answer?:string, from?:object, error?:string}>}
+   */
+  async consult(id, question, opts = {}) {
+    const s = registry.find(id);
+    if (!s) {
+      throw new NotFoundError(`会话不存在: ${id}`);
+    }
+    const adapter = getAdapter(s.tool);
+    if (!adapter) {
+      throw new NotFoundError(`未知 agent 类型: ${s.tool}`);
+    }
+    const args = [
+      '-p', question,
+      '--resume', s.sessionId,
+      '--fork-session',
+      '--permission-mode', 'plan', // 只读：只规划/回答，不编辑
+      '--output-format', 'json',
+    ];
+    const cwd = s.cwd || process.cwd();
+    const from = { name: s.name || String(s.sessionId).slice(0, 8), tool: s.tool, short: String(s.sessionId).slice(0, 8) };
+    return new Promise((resolve) => {
+      execFile(adapter.bin, args, {
+        cwd, timeout: opts.timeoutMs || 120000, maxBuffer: 16 * 1024 * 1024, env: process.env,
+      }, (err, stdout, stderr) => {
+        if (err && !stdout) {
+          resolve({ ok: false, error: ((stderr || err.message || '').trim()).slice(0, 200), from });
+          return;
+        }
+        resolve({ ok: true, answer: extractResult(stdout), from });
+      });
+    });
   }
 
   /* ---------------- 写平面 ---------------- */
@@ -431,4 +490,4 @@ class ControlPlane extends EventEmitter {
   }
 }
 
-module.exports = { ControlPlane, toSummary, toEvent };
+module.exports = { ControlPlane, toSummary, toEvent, extractResult };

@@ -25,21 +25,29 @@ function llmErrorMessage(e) {
 }
 
 const SYSTEM_PROMPT = [
-  '你是 agent-connect 的「信使」——一个**任务管理路由器**，不是干活的 agent。你只做「意图识别 + 路由」。',
+  '你是 agent-connect 的「信使」——一个**任务管理路由器**，不是干活、也不替 worker 回答问题的 agent。你只做「意图识别 + 路由」。',
   '',
-  '你维护一个「当前会话」指针（像 shell 的 cwd）。核心意图只有这几类：',
-  '1) 切换当前会话：switch_current（把 cwd 指向某会话）。',
-  '2) 列出全部任务：list_sessions。',
-  '3) 转发消息：propose_forward（把用户的指令转发注入到当前/指定会话）——用户给普通指令（如「继续」「改用方案B」）且已设当前会话时，就用它。',
-  '4) 读取回复：read_reply（读当前/指定会话的最新回复）。',
-  '5) 接管：propose_takeover；6) 退出关闭：propose_exit；7) 新建：propose_run；截图：snapshot_session。',
+  '你维护一个「当前会话」指针（像 shell 的 cwd）。可用意图：',
+  '1) 切换当前会话：switch_current。 2) 列出全部任务：list_sessions。',
+  '3) **只读咨询：consult_session**——凡是"问它/为什么/怎么改/总结这次改动/解释/评估"这类需要**会话上下文**才能答的问题，一律 fork 该会话只读提问，把 worker 的回答带回来；**绝不要用你自己的记忆/猜测代替它作答**。',
+  '4) 读回复：read_reply（看它最新说了什么/进度）。 5) 转发消息：propose_forward（把指令交给 worker 执行）。',
+  '6) 接管：propose_takeover； 7) 退出关闭：propose_exit； 8) 新建：propose_run； 截图：snapshot_session。',
   '',
-  '**真正的任务由目标 worker 会话执行**——你只负责把消息路由过去，绝不自己写代码/分步骤替它做事、也不长篇推理。',
-  '铁律：对 worker 的任何变更（转发/接管/退出/新建）只能走 propose_*，绝不声称已执行。',
-  '当前会话可能失效：若工具返回 stale 提示，请如实转达并建议用户重新 switch_current，不要继续在失效会话上操作。',
+  '判断规则：',
+  '- 需要"会话里的知识/结论"来回答 → consult_session（只读 fork），不要自答。',
+  '- 只读咨询的结论若表明"需要真正改动代码/执行" → **建议用户接管该会话进入编辑模式**（并可提议 propose_takeover），不要直接在只读上下文里改。',
+  '- 让 worker 真正干活/改东西 → propose_forward（需确认）。',
+  '- 只是看状态/列表/最近回复 → list_sessions / read_reply / get_status。',
   '',
-  '回复风格：一到几句话说清「我要做什么/结果」。多会话用 Markdown 表格（状态/名称/项目/Agent/最近输入），',
-  'emoji 标状态（✅ 空闲 / 🔄 运行中 / ⏳ 待输入 / 💀 已退出 / 🧩 IDE），当前会话用 📍 标注。展示 8 位短 ID，调用工具用完整 sessionId。',
+  '铁律：对 worker 的任何**变更**只能走 propose_*，绝不声称已执行。当前会话失效（工具返回 stale）如实告知并建议重新 switch_current。',
+  '',
+  '**回复必须标明来源**，分清两层：',
+  '- 你（信使）自己的话：正常文本，可加「🧭 信使：」前缀。',
+  '- 来自被管控会话的内容（consult_session / read_reply 的 from/answer）：放进引用块并标注来源，例如：',
+  '  > 🔁 来自 <名称·agent>（只读）：<worker 的原话>',
+  '不要把 worker 的回答冒充成你自己的话。',
+  '',
+  '排版：多会话用 Markdown 表格（状态/名称/项目/Agent/最近输入），emoji 标状态（✅ 空闲 / 🔄 运行中 / ⏳ 待输入 / 💀 已退出 / 🧩 IDE），当前会话用 📍。展示 8 位短 ID，调用工具用完整 sessionId。',
 ].join('\n');
 
 /**
@@ -111,7 +119,7 @@ function buildTools({
     }),
 
     read_reply: tool({
-      description: '读取会话最新回复与状态（默认当前会话）。用于"它说什么了 / 看回复"。',
+      description: '读取会话最新回复与状态（默认当前会话）。用于"它说什么了 / 看回复 / 当前进度"。只读转录，不打扰会话。',
       inputSchema: z.object({ sessionId: z.string().optional() }),
       execute: async ({ sessionId }) => {
         const id = target(sessionId);
@@ -122,11 +130,43 @@ function buildTools({
         try { detail = await plane.getSession(id); } catch (e) { /* 已退出 */ }
         return {
           sessionId: id,
-          short: String(id).slice(0, 8),
-          agent: detail ? detail.tool : null,
+          from: `${(detail && detail.name) || String(id).slice(0, 8)}·${detail ? detail.tool : '?'}`,
           status: detail ? detail.status : '(已退出)',
           lastReply: last ? last.text.slice(0, 1200) : '(暂无回复)',
         };
+      },
+    }),
+
+    consult_session: tool({
+      description: '【只读咨询】fork 目标会话（默认当前）为只读副本并向它提问，答案来自该 worker 本身且不改动它。'
+        + '凡是"问它/为什么/怎么改/总结/解释/评估"这类需要会话上下文来回答的咨询，都用这个，不要自己臆测作答。'
+        + '若答案表明需要真正修改，请回复里建议用户「接管」该会话进入编辑模式。',
+      inputSchema: z.object({
+        question: z.string().describe('要问该会话的问题'),
+        sessionId: z.string().optional().describe('不填则默认当前会话'),
+      }),
+      execute: async ({ question, sessionId }) => {
+        const v = await validateTarget(sessionId);
+        if (v.note) return v.note;
+        const r = await plane.consult(v.id, question);
+        if (!r.ok) return { ok: false, note: `只读咨询失败: ${r.error || '未知'}（可尝试接管后再问）` };
+        return {
+          ok: true,
+          mode: 'read-only-fork',
+          from: `${r.from.name}·${r.from.tool}`,
+          answer: r.answer,
+        };
+      },
+    }),
+
+    get_status: tool({
+      description: '快速查询某会话是否可控与忙/闲状态（默认当前会话）。',
+      inputSchema: z.object({ sessionId: z.string().optional() }),
+      execute: async ({ sessionId }) => {
+        const id = target(sessionId);
+        if (!id) return noCurrent;
+        const s = await plane.getSession(id);
+        return { status: s.status, live: s.live, controllable: s.controllable, channel: s.channel };
       },
     }),
 
