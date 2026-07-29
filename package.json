@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/xinyuehtx/connect.git"
+    "url": "git+ssh://git@github.com/xinyuehtx/agent-connect.git"
   },
   "publishConfig": {
     "access": "public"

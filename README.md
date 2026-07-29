@@ -4,7 +4,7 @@
 
 > Monitor and control **multiple** coding-agent sessions (Claude Code / qodercli) running on your machine — straight from DingTalk on your phone. **Read/write split · one-to-many · messenger agent for intent dispatch · human-confirmed writes.**
 
-📖 **Intro site:** https://xinyuehtx.github.io/connect/
+📖 **Intro site:** https://xinyuehtx.github.io/agent-connect/
 
 Send one message in DingTalk to see the status of every agent session on your machine, pull results read-only, and inject follow-up instructions into a specific task. A lightweight **messenger agent** (built on the Vercel AI SDK, any OpenAI-compatible model) reads your intent, decides read vs. write, and targets the right session — every mutation of a worker session waits for **your confirmation**. Messages ride [cc-connect](https://github.com/chenhg5/cc-connect) for DingTalk ⇄ local transport; a companion `agent-connect serve` provides a web console.
 
@@ -169,7 +169,7 @@ MIT
 
 > 从手机（钉钉）监控并控制本机上运行的**多个** coding agent 会话（Claude Code / qodercli）：**读写分离 · 一对多 · 信使 Agent 做意图分派 · 写操作人工确认。**
 
-📖 **使用介绍网站：** https://xinyuehtx.github.io/connect/
+📖 **使用介绍网站：** https://xinyuehtx.github.io/agent-connect/
 
 在钉钉里发一句话，就能查看本机所有 agent 任务的状态、只读拉取结果、并把后续指令注入到指定的那个任务。一个轻量的**信使 Agent**（Vercel AI SDK，可配置任意 OpenAI 兼容模型）理解你的意图、决定读还是写、定位到哪个会话；任何变更 worker 会话的操作都要你**确认**后才执行。基于 [cc-connect](https://github.com/chenhg5/cc-connect) 做钉钉 ↔ 本地的消息传输，配套 `agent-connect serve` 提供 Web 控制台。
 

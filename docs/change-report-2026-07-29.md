@@ -46,7 +46,7 @@
 
 ## 待你关注的取舍 / 已知小项
 - **Web 消息气泡暂以纯文本显示 Markdown**（钉钉端正常渲染）；如需网页也渲染表格/加粗，可后续加一个轻量 Markdown 渲染。
-- **仓库名与 Pages 未改**：GitHub 仍是 `xinyuehtx/connect`、站点 `xinyuehtx.github.io/connect`（只改了产品名 agent-connect；如需连仓库一起改名请告知）。
+- **仓库与 Pages 已改名**：GitHub `xinyuehtx/agent-connect`、站点 `https://xinyuehtx.github.io/agent-connect/`（旧 URL 由 GitHub 自动重定向）。
 - 迁移是**复制**而非移动：旧 `~/.cc-connect-router` 仍保留，确认无误后可自行删除。
 
 ## 验证
