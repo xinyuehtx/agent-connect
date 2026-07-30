@@ -36,6 +36,32 @@ DingTalk ─Stream─► cc-connect ─exec─► agent-connect acp (bridge) ─
 
 ---
 
+## 🆚 vs OpenClaw (why not OpenClaw)
+
+They're **not the same kind of thing**. [OpenClaw](https://github.com/openclaw/openclaw) is a **general-purpose AI agent that does the work itself** — its own agent loop, tools, model calls, and memory, holding the keys to your shell / browser / email and acting on your behalf. agent-connect is a **remote-control / dispatch layer** on top of the coding agents you **already run** — it does no work itself; it only decides *read vs. write / which session / which verb*, and the actual task still runs in that worker (Claude Code / qoder…) using its own full context.
+
+| Dimension | agent-connect | OpenClaw |
+|---|---|---|
+| What it is | A **control / messenger layer** over existing agents | The **agent itself** (the Gateway is the whole system) |
+| Who executes | Your existing Claude Code / qoder worker, **keeping its full project context & tools** | OpenClaw itself (a fresh agent with weaker context) |
+| One-to-many | Core feature: monitor / address **many** concurrent sessions | A single gateway assistant |
+| Safety model | **Read/write split** + **per-mutation human confirm**; localhost-only; explicit allowlist | Autonomous by default → larger attack surface |
+| Context | Messenger has its own context, **never enters the worker's** | It *is* that context |
+| Scope | Narrow & focused: remote-control your dev sessions from a phone | General personal assistant (calendar / chat / code) |
+| Footprint | Light: one layer + a thin ACP bridge, transport reused from cc-connect | A whole long-lived runtime |
+
+**Why use this instead of OpenClaw**
+- **Don't reinvent the agent, keep the strong context.** Your real coding power lives in your existing Claude Code session (full project context, permissions, toolchain). This lets it **keep working** — it just becomes addressable / observable / injectable from chat. OpenClaw instead spins up its own agent to understand your project, with weaker context.
+- **Safety is the premise, not a patch.** Every mutation of a worker waits for your “confirm”; reads have zero side effects (on-disk transcript or a read-only fork); the web console binds `127.0.0.1` only.
+- **One-to-many by design.** “Which session” is a first-class concept — ideal when several tasks run on your machine at once.
+- **Light & composable.** It's just a layer; transport is reused from cc-connect (DingTalk / Feishu / Telegram / Slack…).
+
+**When OpenClaw is the better fit:** if you want a **general autonomous assistant** for non-coding chores (calendar, cross-platform messaging, background GitHub-issue triage) and accept the “hand it the keys and let it run” tradeoff, OpenClaw fits better. agent-connect is **deliberately narrow** — it solves exactly one thing: safely remote-controlling multiple local coding agents from your phone.
+
+> In one line: **OpenClaw = give the LLM the keys and let it act for you; agent-connect = keep a human in the loop, let the real coding agent keep doing the work, and just make it controllable and observable from chat.**
+
+---
+
 ## 📦 Install
 
 **One-click (recommended)** — installs the CLI + cc-connect, checks Node/tmux, runs `agent-connect init`:

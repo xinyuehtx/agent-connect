@@ -17,6 +17,7 @@
         <a href="#planes"><span class="zh">读写平面</span><span class="en">Planes</span></a>
         <a href="#flow"><span class="zh">工作流</span><span class="en">Workflow</span></a>
         <a href="#platforms"><span class="zh">任意 IM</span><span class="en">Any IM</span></a>
+        <a href="#vs"><span class="zh">对比</span><span class="en">vs OpenClaw</span></a>
         <a href="#start"><span class="zh">快速开始</span><span class="en">Quick start</span></a>
         <a href="#cli">CLI</a>
         <a href="https://github.com/xinyuehtx/agent-connect" target="_blank" rel="noopener">GitHub</a>
@@ -199,6 +200,82 @@ You ▸ bump the version to 0.6.1         # needs an edit → suggest takeover
       <div class="note">
         <span class="zh">🖌️ <b>流式 AI 卡片（钉钉，可选）</b>：在钉钉开放平台建「AI 卡片模板」，把 templateId 填到 <code>card_template_id</code>（或 Web 设置页），回复即打字机式流式呈现；不填则回退普通消息，功能不受影响。<br>📇 <b>访问控制</b>：发送者不在白名单时会收到明确的「无权限」提示，而非静默。</span>
         <span class="en">🖌️ <b>Streaming AI card (DingTalk, optional)</b>: create an AI card template on the DingTalk Open Platform and set its <code>card_template_id</code> (or via the web settings) for typewriter-style streaming; otherwise replies fall back to normal messages.<br>📇 <b>Access control</b>: senders not in the allowlist get an explicit “not authorized” reply, not silence.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- vs OpenClaw -->
+  <section id="vs">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">对比</span><span class="en">Comparison</span></div>
+      <h2><span class="zh">与 OpenClaw 的区别 —— why not OpenClaw</span><span class="en">vs OpenClaw — why not OpenClaw</span></h2>
+      <p class="sub">
+        <span class="zh">两者<b>不是同一类东西</b>：<a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener">OpenClaw</a> 是一个<b>自己干活的通用 AI Agent 本体</b>（有自己的 agent loop、工具、模型、记忆，直接拿着 shell / 浏览器 / 邮件的钥匙替你做事）；agent-connect 是套在你<b>已有 coding agent</b> 之上的<b>遥控 / 分派层</b>——它自己不干活，只判断「读还是写 / 哪个会话 / 哪个动词」，真正的活仍由 worker（Claude Code / qoder…）用它自己的完整上下文去做。</span>
+        <span class="en">They're <b>not the same kind of thing</b>. <a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener">OpenClaw</a> is a <b>general-purpose AI agent that does the work itself</b> — its own loop, tools, model, and memory, holding the keys to your shell / browser / email. agent-connect is a <b>remote-control / dispatch layer</b> over the coding agents you <b>already run</b> — it does no work itself; it only decides <i>read vs. write / which session / which verb</i>, while the task still runs in the worker (Claude Code / qoder…) with its own full context.</span>
+      </p>
+      <table class="tbl">
+        <thead><tr>
+          <th><span class="zh">维度</span><span class="en">Dimension</span></th>
+          <th>agent-connect</th>
+          <th>OpenClaw</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="zh">本质</span><span class="en">What it is</span></td>
+            <td><span class="zh">已有 agent 的<b>控制 / 信使层</b></span><span class="en">A <b>control / messenger layer</b> over existing agents</span></td>
+            <td><span class="zh"><b>Agent 本体</b>（Gateway 就是整个系统）</span><span class="en">The <b>agent itself</b> (the Gateway is the whole system)</span></td>
+          </tr>
+          <tr>
+            <td><span class="zh">谁执行任务</span><span class="en">Who executes</span></td>
+            <td><span class="zh">你原来的 Claude Code / qoder，<b>保留完整项目上下文与工具</b></span><span class="en">Your existing Claude Code / qoder, <b>keeping full project context &amp; tools</b></span></td>
+            <td><span class="zh">OpenClaw 自己（另起一个上下文较弱的 agent）</span><span class="en">OpenClaw itself (a fresh agent with weaker context)</span></td>
+          </tr>
+          <tr>
+            <td><span class="zh">一对多</span><span class="en">One-to-many</span></td>
+            <td><span class="zh">核心能力：监控 / 寻址<b>多个</b>并发会话</span><span class="en">Core feature: monitor / address <b>many</b> concurrent sessions</span></td>
+            <td><span class="zh">单一网关助手</span><span class="en">A single gateway assistant</span></td>
+          </tr>
+          <tr>
+            <td><span class="zh">安全模型</span><span class="en">Safety model</span></td>
+            <td><span class="zh"><b>读写分离</b> + 写操作<b>逐条人工确认</b>；仅监听本机；显式白名单</span><span class="en"><b>Read/write split</b> + <b>per-mutation human confirm</b>; localhost-only; explicit allowlist</span></td>
+            <td><span class="zh">自主为默认 → 攻击面更大</span><span class="en">Autonomous by default → larger attack surface</span></td>
+          </tr>
+          <tr>
+            <td><span class="zh">上下文</span><span class="en">Context</span></td>
+            <td><span class="zh">信使独立上下文，<b>永不进入 worker 上下文</b></span><span class="en">Messenger has its own context, <b>never enters the worker's</b></span></td>
+            <td><span class="zh">它本身就是那个上下文</span><span class="en">It <i>is</i> that context</span></td>
+          </tr>
+          <tr>
+            <td><span class="zh">定位</span><span class="en">Scope</span></td>
+            <td><span class="zh">窄而专：从手机遥控你的 dev 会话</span><span class="en">Narrow &amp; focused: remote-control your dev sessions from a phone</span></td>
+            <td><span class="zh">通用个人助理（日程 / 消息 / 代码都做）</span><span class="en">General personal assistant (calendar / chat / code)</span></td>
+          </tr>
+          <tr>
+            <td><span class="zh">体量</span><span class="en">Footprint</span></td>
+            <td><span class="zh">轻：一层 + ACP 薄桥，传输复用 cc-connect</span><span class="en">Light: one layer + a thin ACP bridge, transport reused from cc-connect</span></td>
+            <td><span class="zh">一整套长驻运行时</span><span class="en">A whole long-lived runtime</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="grid" style="margin-top:26px">
+        <div class="card">
+          <h3><span class="zh">✅ 为什么用它而不是 OpenClaw</span><span class="en">✅ Why use this instead</span></h3>
+          <p>
+            <span class="zh"><b>不重造轮子、保住强上下文</b>：真正的编码能力在你原来的 Claude Code 会话里（完整项目上下文、权限、工具链），这里让它<b>继续干</b>，只是变得可从聊天里寻址 / 观察 / 注入。<br><b>安全是设计前提</b>：改动 worker 要你回「确认」，读操作零副作用，Web 只听 <code>127.0.0.1</code>。<br><b>天生一对多</b>：「切到哪个会话」是一等概念。<br><b>轻量可组合</b>：只是一层，传输复用 cc-connect。</span>
+            <span class="en"><b>Don't reinvent the agent, keep the strong context</b> — your real coding power lives in your existing Claude Code session (full project context, permissions, toolchain); it just becomes addressable / observable / injectable from chat.<br><b>Safety is the premise</b>: every mutation waits for your “confirm”, reads have zero side effects, the web console binds <code>127.0.0.1</code> only.<br><b>One-to-many by design</b>: “which session” is first-class.<br><b>Light &amp; composable</b>: just a layer, transport reused from cc-connect.</span>
+          </p>
+        </div>
+        <div class="card">
+          <h3><span class="zh">🤔 什么时候反而选 OpenClaw</span><span class="en">🤔 When OpenClaw fits</span></h3>
+          <p>
+            <span class="zh">你要的是一个<b>通用自主助理</b>——处理日程、跨平台联络、后台盯 GitHub issue 等<b>非编码</b>杂务，且愿意接受「给它钥匙让它自己跑」的取舍。agent-connect 是<b>刻意收窄</b>的：只解决「从手机安全地遥控本机多个 coding agent」这一件事。</span>
+            <span class="en">You want a <b>general autonomous assistant</b> for <b>non-coding</b> chores — calendar, cross-platform messaging, background GitHub-issue triage — and accept the “hand it the keys and let it run” tradeoff. agent-connect is <b>deliberately narrow</b>: it solves exactly one thing — safely remote-controlling multiple local coding agents from your phone.</span>
+          </p>
+        </div>
+      </div>
+      <div class="note" style="margin-top:18px">
+        <span class="zh">🧭 一句话：<b>OpenClaw = 给 LLM 钥匙让它替你做；agent-connect = 人留在环里，真正的 coding agent 继续做，只是让它从聊天里可控可看。</b></span>
+        <span class="en">🧭 In one line: <b>OpenClaw hands the LLM the keys to act for you; agent-connect keeps a human in the loop, lets the real coding agent keep working, and just makes it controllable &amp; observable from chat.</b></span>
       </div>
     </div>
   </section>

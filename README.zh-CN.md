@@ -36,6 +36,32 @@
 
 ---
 
+## 🆚 与 OpenClaw 的区别（why not OpenClaw）
+
+两者**不是同一类东西**：[OpenClaw](https://github.com/openclaw/openclaw) 是一个**自己干活的通用 AI Agent 本体**（有自己的 agent loop、工具、模型调用、记忆，直接拿着 shell / 浏览器 / 邮件的钥匙替你做事）；agent-connect 是套在你**已有 coding agent** 之上的**遥控 / 分派层**——它自己不干活，只做「读还是写 / 哪个会话 / 哪个动词」的意图分派，真正的活仍由那个 worker（Claude Code / qoder…）用它自己的完整上下文去做。
+
+| 维度 | agent-connect | OpenClaw |
+|---|---|---|
+| 本质 | 已有 agent 的**控制 / 信使层** | **Agent 本体**（Gateway 就是整个系统） |
+| 谁执行任务 | 你原来的 Claude Code / qoder 等 worker，**保留其完整项目上下文与工具** | OpenClaw 自己（另起一个上下文较弱的 agent） |
+| 一对多 | 核心能力：监控 / 寻址**多个**并发会话 | 单一网关助手 |
+| 安全模型 | **读写分离** + 写操作**逐条人工确认**；仅监听本机；显式白名单 | 自主为默认 → 攻击面更大 |
+| 上下文 | 信使独立上下文，**永不进入 worker 上下文** | 它本身就是那个上下文 |
+| 定位 | 窄而专：从手机遥控你的 dev 会话 | 通用个人助理（日程 / 消息 / 代码都做） |
+| 体量 | 轻：一层 + ACP 薄桥，传输复用 cc-connect | 一整套长驻运行时 |
+
+**为什么用它而不是 OpenClaw**
+- **不重造轮子、保住强上下文**：真正的编码能力在你原来的 Claude Code 会话里（完整项目上下文、权限、工具链），这里让它**继续干**，只是变得可从聊天里寻址 / 观察 / 注入；OpenClaw 则是另起一个它自己的 agent 去理解你的项目，上下文更弱。
+- **安全是设计前提，不是补丁**：每个会改动 worker 的操作都要你回「确认」，读操作零副作用（只读盘上的 transcript 或只读 fork），Web 只听 `127.0.0.1`。
+- **天生一对多**：「切到哪个会话」在这里是一等概念，适合本机同时跑多个任务时从手机分派。
+- **轻量、可组合**：只是一层，传输直接复用 cc-connect（钉钉 / 飞书 / Telegram / Slack… 都能用）。
+
+**什么时候反而该选 OpenClaw**：你要的是一个**通用自主助理**（处理日程、跨平台联络、后台盯 GitHub issue 等非编码杂务），且愿意接受「给它钥匙让它自己跑」的取舍——那 OpenClaw 更合适。agent-connect 是**刻意收窄**的：只解决「从手机安全地遥控本机多个 coding agent」这一件事。
+
+> 一句话：**OpenClaw = 给 LLM 钥匙让它替你做；agent-connect = 人留在环里，真正的 coding agent 继续做，只是让它从聊天里可控可看。**
+
+---
+
 ## 📦 安装
 
 **一键安装（推荐）** —— 安装 CLI + cc-connect，检查 Node/tmux，并执行 `agent-connect init`：
