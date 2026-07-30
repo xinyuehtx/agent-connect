@@ -10,13 +10,7 @@ body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, 
 .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
 .spacer { flex: 1; }
 
-.login { position: fixed; inset: 0; display: none; place-items: center; background: var(--bg); z-index: 40; }
-.login__card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 32px; width: min(92vw, 400px); }
-.login__mark { font-size: 22px; font-weight: 700; }
-.login__mark .dot, .brand .dot { color: var(--brand); }
-.login__sub { color: var(--muted); margin: 6px 0 20px; }
-.login__row { display: flex; gap: 8px; } .login__row input { flex: 1; }
-.login__err { color: var(--warn); min-height: 18px; margin-top: 10px; font-size: 13px; }
+.brand .dot { color: var(--brand); }
 
 .app { display: none; flex-direction: column; height: 100%; }
 .app.is-ready { display: flex; }

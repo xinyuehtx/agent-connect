@@ -26,14 +26,14 @@ function textFromPrompt(prompt) {
  */
 async function forwardToDaemon(text) {
   const app = loadAppConfig();
-  const { host, port, token } = app.web;
+  const { host, port } = app.web;
   const sessionKey = process.env.CC_SESSION_KEY || '';
   const { platform, conversationId, senderId } = parseSessionKey(sessionKey);
   const url = `http://${host}:${port}/im/handle`;
   try {
     const r = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         platform: platform || 'dingtalk', conversationId, senderId, sessionKey, text,
       }),

@@ -64,9 +64,9 @@ npm install -g https://github.com/xinyuehtx/agent-connect/releases/download/v1.3
 # 1. Create default config at ~/.agent-connect/config.toml
 agent-connect init
 
-# 2. Start the web console daemon (prints an access token on first run)
+# 2. Start the web console daemon (localhost-only, no login)
 agent-connect serve
-#   Open http://127.0.0.1:8787 → log in with the printed token
+#   Open http://127.0.0.1:8787
 #   Settings → LLM Provider: base_url / api_key / model (any OpenAI-compatible endpoint)
 #   Settings → IM connector: DingTalk client_id / client_secret + gate (prefix / allowlist)
 
@@ -160,7 +160,7 @@ sequenceDiagram
 
 ## 🖥️ Web console (`agent-connect serve`)
 
-Open `http://127.0.0.1:8787`. The token is optional — leave `web.token` empty for open localhost access, or set one to require login. Three views:
+Open `http://127.0.0.1:8787` — it binds to localhost only, with no login. Three views:
 
 - **Board** — every session as a card (status · project · agent · last input) with 详情 / 接管 / 退出 actions. **Running / waiting sessions are pinned to the top**; a **recency filter** (1 / 3 / 7 days) hides old completed tasks — and the same setting applies to IM `list_sessions`. Live via SSE (≈1.2 s).
 - **Session detail** — one worker's message stream (user / assistant / tool calls) updating live; send / takeover / exit from here.
@@ -224,7 +224,7 @@ Replies are sent as **Markdown** (tables, bold, code blocks, emoji status), so t
 | Command | Description |
 |---------|-------------|
 | `agent-connect init [--force]` | Create config dir + default config (`--force` overwrites) |
-| `agent-connect serve [-H host] [-p port]` | Start web console + messenger daemon (planes + gate; prints token on first run) |
+| `agent-connect serve [-H host] [-p port]` | Start web console + messenger daemon (planes + gate; localhost-only, no login) |
 | `agent-connect acp` | ACP bridge for cc-connect (spawned by cc-connect; don't run by hand) |
 | `agent-connect start` | Start cc-connect (DingTalk ⇄ local transport) |
 | `agent-connect config get/set/remove/list` | Read/write config (dot-path keys, sensitive fields masked) |

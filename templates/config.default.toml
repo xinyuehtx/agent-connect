@@ -4,9 +4,8 @@
 
 # ── Web 控制台（agent-connect serve）──
 [web]
-host = "127.0.0.1"
+host = "127.0.0.1"       # 仅监听本机；控制台开放访问、无需登录
 port = 8787
-token = ""              # 可选：留空 = 本机开放访问（仅 127.0.0.1）；填写则需令牌登录
 
 # ── 主动通知（仅在这两种情况下推送，其余不打扰）──
 [notify]
@@ -14,6 +13,7 @@ enabled = true
 scope = "all"                    # all | controllable（仅通知你远控的 tmux 会话）
 on_needs_confirm = true          # 会话进入 waiting（需你确认/输入）时推送
 on_task_done = true              # 会话 busy → idle（任务完成）时推送
+monitor_only = false             # 纯监控型 GUI 应用(qwen/qoderwork)是否也推；默认 false=屏蔽
 cooldown_ms = 30000              # 同一会话同类通知的冷却
 
 # ── 时效过滤（Web 看板与 IM list_sessions 共用，避免过多旧任务透出）──

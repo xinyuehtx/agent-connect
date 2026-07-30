@@ -7,7 +7,7 @@ const { loadConfig, saveConfig } = require('./config-store');
  * 信使/Web/IM 的默认值。cc-connect 用的 [[projects]] 不在此处规范化。
  */
 const DEFAULTS = {
-  web: { host: '127.0.0.1', port: 8787, token: '' },
+  web: { host: '127.0.0.1', port: 8787 },
   messenger: {
     provider: 'openai-compatible',
     model: 'gpt-4o-mini',

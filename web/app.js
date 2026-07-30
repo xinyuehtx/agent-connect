@@ -22,26 +22,17 @@ const STATUS = {
 const st = (s) => STATUS[s.status] || STATUS.unknown;
 
 async function api(path, opts) {
-  const r = await fetch(path, { credentials: 'same-origin', headers: { 'content-type': 'application/json' }, ...opts });
-  if (r.status === 401 && path !== '/api/login') showLogin('需要访问令牌。');
-  return r;
+  return fetch(path, { credentials: 'same-origin', headers: { 'content-type': 'application/json' }, ...opts });
 }
 
 /* ---------- boot ---------- */
 async function init() {
   const r = await api('/api/agent/enabled');
-  if (r.status === 401) { showLogin(); return; }
   const j = await r.json().catch(() => ({ enabled: false }));
   state.agentEnabled = !!j.enabled;
   boot();
 }
-function showLogin(msg) { $('login').style.display = 'grid'; $('app').classList.remove('is-ready'); if (msg) $('loginErr').textContent = msg; }
-async function doLogin() {
-  const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ token: $('token').value }) });
-  if (r.status === 204) location.reload(); else $('loginErr').textContent = '令牌无效。';
-}
 function boot() {
-  $('login').style.display = 'none';
   $('app').classList.add('is-ready');
   loadFilter();
   refreshSessions();
@@ -335,8 +326,6 @@ function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('is
 function autoGrow(t) { t.style.height = 'auto'; t.style.height = `${Math.min(160, t.scrollHeight)}px`; }
 
 /* ---------- wire ---------- */
-$('loginBtn').onclick = doLogin;
-$('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 for (const t of document.querySelectorAll('#viewTabs .tab')) t.onclick = () => setView(t.dataset.view);
 $('newBtn').onclick = newSession;
 $('refreshBtn').onclick = refreshSessions;

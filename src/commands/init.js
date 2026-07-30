@@ -34,7 +34,7 @@ function init(options = {}) {
   console.log(`  配置文件: ${CONFIG_FILE}`);
   console.log('');
   console.log('下一步:');
-  console.log('  1. agent-connect serve                     # 启动 Web 控制台（首次会打印访问 token）');
+  console.log('  1. agent-connect serve                     # 启动 Web 控制台（仅本机，无需登录）');
   console.log('  2. 浏览器打开 http://127.0.0.1:8787    # 在配置页填 LLM provider 与钉钉凭证');
   console.log('     或用 CLI:');
   console.log('       agent-connect config set messenger.base_url <你的兼容端点/v1>');

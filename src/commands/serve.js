@@ -19,15 +19,6 @@ const { SessionNotifier } = require('../lib/notify/watcher');
 const { validateProviderConfig } = require('../lib/messenger/provider');
 
 /**
- * Web 令牌为可选：留空则控制台在 127.0.0.1 上开放访问（个人自用），不再强制生成。
- * @param {object} app 规范化配置
- * @returns {string} 令牌（可能为空字符串）
- */
-function resolveToken(app) {
-  return app.web.token || '';
-}
-
-/**
  * agent-connect serve
  * 启动守护：Web 控制台 + 控制面 + 信使栈 + /im/handle 闸门。
  * @param {object} [opts] { host, port }
@@ -36,7 +27,6 @@ async function serve(opts = {}) {
   process.on('unhandledRejection', (e) => console.error('[agent-connect] unhandledRejection:', e && e.message));
 
   const app = loadAppConfig();
-  const token = resolveToken(app);
   const host = opts.host || app.web.host;
   const port = Number(opts.port || app.web.port);
 
@@ -158,7 +148,6 @@ async function serve(opts = {}) {
 
   const server = await buildHttp({
     plane,
-    token,
     sse,
     agent: {
       conductor, pending, historyStore, conversationKey, current: currentStore,
@@ -181,7 +170,7 @@ async function serve(opts = {}) {
   notifier.start();
 
   const v = validateProviderConfig(messengerCfg);
-  console.log(`[agent-connect] 控制台已启动: http://${host}:${port}${token ? '' : '  (开放模式 · 仅本机)'}`);
+  console.log(`[agent-connect] 控制台已启动: http://${host}:${port}  (仅本机 · 无需登录)`);
   if (!v.ok) {
     console.log(`[agent-connect] ⚠ 信使 LLM 未就绪（${v.reason}）——请在控制台「设置 → LLM Provider」中配置。`);
   }

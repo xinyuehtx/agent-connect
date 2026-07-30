@@ -1,6 +1,5 @@
 'use strict';
 
-const { checkToken, extractToken } = require('./auth');
 const { DomainError } = require('../lib/errors');
 const { formatResult } = require('../lib/messenger/conductor');
 const { withQuote } = require('../lib/im/quote');
@@ -71,48 +70,11 @@ function historyToEvents(history) {
  */
 function registerRoutes(app, deps) {
   const {
-    plane, token, sse, agent, config,
+    plane, sse, agent, config,
   } = deps;
-  // 令牌可选：为空则视为"本机开放模式"，所有鉴权直通（仅监听 127.0.0.1 时安全）。
-  const authOk = (provided) => !token || checkToken(provided, token);
 
-  // 公开健康检查
+  // 本机控制台：仅监听 127.0.0.1，开放访问、无登录（访问令牌功能已取消）。
   app.get('/healthz', async () => ({ ok: true }));
-
-  // 登录：用主令牌换 cookie（开放模式下无需登录，前端不会走到这里）
-  app.post('/api/login', async (req, reply) => {
-    const body = req.body || {};
-    if (!token) {
-      return reply.code(204).send();
-    }
-    if (!checkToken(body.token, token)) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'bad token' } });
-    }
-    reply.setCookie('ccr_token', token, {
-      httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365,
-    });
-    return reply.code(204).send();
-  });
-
-  app.post('/api/logout', async (_req, reply) => {
-    reply.clearCookie('ccr_token', { path: '/' });
-    return reply.code(204).send();
-  });
-
-  // 鉴权：master token（cookie 或 Bearer）。令牌为空 = 开放模式，直通。
-  app.addHook('preHandler', async (req, reply) => {
-    if (!req.url.startsWith('/api/')) {
-      return undefined;
-    }
-    if (req.url === '/api/login' || req.url === '/api/logout') {
-      return undefined;
-    }
-    const provided = extractToken({ headers: req.headers, cookies: req.cookies || {} });
-    if (!authOk(provided)) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'unauthorized' } });
-    }
-    return undefined;
-  });
 
   const wrap = (reply, fn, ok = 200) => fn()
     .then((v) => reply.code(ok).send(v))
@@ -196,12 +158,7 @@ function registerRoutes(app, deps) {
   }));
 
   // ---- IM 摄入闸门（供 ACP 薄桥调用，平台无关）----
-  // 单独 Bearer 校验（preHandler 只管 /api/*）。
   app.post('/im/handle', async (req, reply) => {
-    const provided = extractToken({ headers: req.headers, cookies: req.cookies || {} });
-    if (!authOk(provided)) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'unauthorized' } });
-    }
     if (!agent) {
       return reply.send({ ignored: true, reason: 'agent disabled' });
     }

@@ -64,9 +64,9 @@ npm install -g https://github.com/xinyuehtx/agent-connect/releases/download/v1.3
 # 1. 初始化配置（生成 ~/.agent-connect/config.toml）
 agent-connect init
 
-# 2. 启动 Web 控制台守护（首次会打印访问令牌）
+# 2. 启动 Web 控制台守护（仅本机，无需登录）
 agent-connect serve
-#   浏览器打开 http://127.0.0.1:8787 → 用打印出的令牌登录
+#   浏览器打开 http://127.0.0.1:8787
 #   设置 → LLM Provider：填 base_url / api_key / model（任意 OpenAI 兼容端点）
 #   设置 → IM 连接器：填钉钉 client_id / client_secret + 闸门（前缀 / 白名单）
 
@@ -160,7 +160,7 @@ sequenceDiagram
 
 ## 🖥️ Web 控制台（`agent-connect serve`）
 
-浏览器打开 `http://127.0.0.1:8787`。令牌可选——`web.token` 留空即本机开放访问，填写则需登录。三个视图：
+浏览器打开 `http://127.0.0.1:8787` —— 仅监听本机、无需登录。三个视图：
 
 - **看板**：每个会话一张卡片（状态 · 项目 · Agent · 最近输入）+ 详情 / 接管 / 退出；**运行中/待输入置顶**；**时效过滤**（近 1/3/7 天）隐藏过旧的已完成任务——该设置对 IM `list_sessions` 同样生效；SSE 实时刷新（约 1.2 秒）。
 - **单会话详情**：某 worker 的消息流（用户 / 助手 / 工具调用）实时更新，可在此发送 / 接管 / 退出。
@@ -224,7 +224,7 @@ cc-connect 本身桥接**多种平台**（钉钉、飞书、Telegram、Slack、D
 | 命令 | 说明 |
 |------|------|
 | `agent-connect init [--force]` | 初始化配置目录与默认配置（`--force` 覆盖） |
-| `agent-connect serve [-H host] [-p port]` | 启动 Web 控制台 + 信使守护（读写平面 + 安全闸；首启打印令牌） |
+| `agent-connect serve [-H host] [-p port]` | 启动 Web 控制台 + 信使守护（读写平面 + 安全闸；仅本机、无需登录） |
 | `agent-connect acp` | ACP 薄桥，供 cc-connect 拉起（勿手动运行） |
 | `agent-connect start` | 启动 cc-connect（钉钉 ↔ 本地 消息传输） |
 | `agent-connect config get/set/remove/list` | 读写配置（点号路径，敏感字段遮掩） |
