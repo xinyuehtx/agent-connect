@@ -38,8 +38,24 @@
 
 ## 📦 安装
 
+**一键安装（推荐）** —— 安装 CLI + cc-connect，检查 Node/tmux，并执行 `agent-connect init`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xinyuehtx/agent-connect/main/scripts/install.sh | bash
+```
+
+<sub>设 `AC_SKIP_CC=1` 跳过网关；设 `AC_SKIP_INIT=1` 跳过初始化。</sub>
+
+**或用 npm：**
+
 ```bash
 npm install -g @tengxiaohtx/agent-connect
+```
+
+**或从 GitHub Release 安装**（离线 / 固定版本）—— 到 [Releases](https://github.com/xinyuehtx/agent-connect/releases) 下载 `.tgz`：
+
+```bash
+npm install -g https://github.com/xinyuehtx/agent-connect/releases/download/v1.3.10/agent-connect-1.3.10.tgz
 ```
 
 ## 🚀 快速开始

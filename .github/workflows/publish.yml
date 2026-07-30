@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write   # 创建 GitHub Release 需要写权限
   id-token: write
 
 jobs:
@@ -45,3 +45,18 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Pack tarball for the release asset
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          FILE=$(npm pack | tail -n1)
+          mv "$FILE" "agent-connect-${VERSION}.tgz"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            ./agent-connect-*.tgz

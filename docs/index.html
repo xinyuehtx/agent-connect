@@ -208,6 +208,15 @@ You ▸ bump the version to 0.6.1         # needs an edit → suggest takeover
     <div class="wrap">
       <div class="eyebrow"><span class="zh">快速开始</span><span class="en">Quick start</span></div>
       <h2><span class="zh">四步跑起来</span><span class="en">Up and running in four steps</span></h2>
+      <p class="sub" style="margin-top:8px">
+        <span class="zh">一键安装（装好 CLI + cc-connect，检查 Node/tmux 并 init）：</span>
+        <span class="en">One-click install (CLI + cc-connect, checks Node/tmux, runs init):</span>
+      </p>
+<pre class="code">curl -fsSL https://raw.githubusercontent.com/xinyuehtx/agent-connect/main/scripts/install.sh | bash</pre>
+      <p class="sub" style="margin-top:14px">
+        <span class="zh">或用 npm：<code>npm install -g @tengxiaohtx/agent-connect</code>；或到 <a href="https://github.com/xinyuehtx/agent-connect/releases">Releases</a> 下载 <code>.tgz</code> 离线安装。装好后：</span>
+        <span class="en">Or via npm: <code>npm install -g @tengxiaohtx/agent-connect</code>; or grab a <code>.tgz</code> from <a href="https://github.com/xinyuehtx/agent-connect/releases">Releases</a>. Then:</span>
+      </p>
       <div class="flow">
         <div class="step"><div class="n">1</div><h4><span class="zh">初始化</span><span class="en">Init</span></h4><p><span class="zh">生成默认配置</span><span class="en">Create default config</span><br><code>agent-connect init</code></p></div>
         <div class="step"><div class="n">2</div><h4><span class="zh">起控制台</span><span class="en">Serve</span></h4><p><span class="zh">首启打印访问令牌</span><span class="en">Prints an access token</span><br><code>agent-connect serve</code></p></div>

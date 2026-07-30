@@ -38,8 +38,24 @@ DingTalk ─Stream─► cc-connect ─exec─► agent-connect acp (bridge) ─
 
 ## 📦 Install
 
+**One-click (recommended)** — installs the CLI + cc-connect, checks Node/tmux, runs `agent-connect init`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xinyuehtx/agent-connect/main/scripts/install.sh | bash
+```
+
+<sub>Skip the gateway with `AC_SKIP_CC=1`, skip init with `AC_SKIP_INIT=1`.</sub>
+
+**Or via npm:**
+
 ```bash
 npm install -g @tengxiaohtx/agent-connect
+```
+
+**Or from a GitHub Release** (offline / pinned) — grab the `.tgz` from [Releases](https://github.com/xinyuehtx/agent-connect/releases):
+
+```bash
+npm install -g https://github.com/xinyuehtx/agent-connect/releases/download/v1.3.10/agent-connect-1.3.10.tgz
 ```
 
 ## 🚀 Quick start
