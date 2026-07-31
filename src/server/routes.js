@@ -197,8 +197,11 @@ function registerRoutes(app, deps) {
       const result = await agent.conductor.handle(agent.conversationKey, routed, ctx);
       return reply.send({ reply: withQuote(body.text, formatResult(result), quoteOn), kind: result.kind });
     } catch (e) {
-      console.error('[agent-connect] /im/handle error:', e && e.message);
-      return reply.send({ reply: `处理出错: ${(e && e.message) || e}` });
+      const msg = (e && e.message) || String(e);
+      console.error('[agent-connect] /im/handle error:', msg);
+      // 限流等已带有明确图标/提示的消息直接回；其余加「处理出错」前缀便于排查
+      const reon = /^[🚦⛔⚠️]/.test(msg) ? msg : `处理出错: ${msg}`;
+      return reply.send({ reply: withQuote(body.text, reon, quoteOn) });
     }
   });
 }

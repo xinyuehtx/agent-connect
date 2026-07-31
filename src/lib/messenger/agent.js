@@ -1,7 +1,7 @@
 'use strict';
 
 const { z } = require('zod');
-const { buildModel } = require('./provider');
+const { buildModel, isThrottleResponse } = require('./provider');
 const { makeTranslator, langName } = require('./translate');
 
 /**
@@ -22,6 +22,11 @@ function llmErrorMessage(e) {
   }
   const base = (e && e.message) || '';
   const sc = e && e.statusCode ? `[${e.statusCode}] ` : '';
+  // 限流已在 fetch 层退避重试若干次仍失败：给用户一条清晰、可行动的提示
+  const bodyText = typeof body === 'string' ? body : (body ? JSON.stringify(body) : '');
+  if (isThrottleResponse(e && e.statusCode, `${bodyText} ${base}`)) {
+    return '🚦 模型繁忙（限流），已自动重试 3 次仍未成功，请稍后再发一次。';
+  }
   return `${sc}${detail || base || 'LLM 调用失败'}`;
 }
 

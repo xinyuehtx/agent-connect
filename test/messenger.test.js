@@ -12,7 +12,7 @@ const { AgentConductor, formatResult } = require('../src/lib/messenger/conductor
 const { describeAction } = require('../src/lib/messenger/describe');
 const { classifyMessage, isDecision } = require('../src/lib/im/gate');
 const { parseSessionKey } = require('../src/lib/im/session-key');
-const { validateProviderConfig } = require('../src/lib/messenger/provider');
+const { validateProviderConfig, makeAnthropicFetch, isThrottleResponse } = require('../src/lib/messenger/provider');
 const { llmErrorMessage } = require('../src/lib/messenger/agent');
 const { historyToEvents, mask } = require('../src/server/routes');
 const { toSummary, toEvent } = require('../src/lib/control-plane');
@@ -287,6 +287,64 @@ test('llmErrorMessage surfaces real reason from responseBody', () => {
   assert.strictEqual(llmErrorMessage({ message: 'boom' }), 'boom');
   // handles nested error.message shape
   assert.match(llmErrorMessage({ statusCode: 401, responseBody: JSON.stringify({ error: { message: 'bad key' } }) }), /bad key/);
+});
+
+/* ---------------- throttle detection + retry ---------------- */
+const THROTTLE_BODY = JSON.stringify({
+  success: false, message: '模型提供方限流', code: 'MPE-429',
+  detailMessage: '{"code":"Throttling.AllocationQuota","message":"Allocated quota exceeded"}',
+});
+
+test('isThrottleResponse detects MPE-429 wrapped in HTTP 400 and real 429', () => {
+  assert.strictEqual(isThrottleResponse(400, THROTTLE_BODY), true);
+  assert.strictEqual(isThrottleResponse(429, '{}'), true);
+  // 普通的 400（非限流）不应被误判
+  assert.strictEqual(isThrottleResponse(400, JSON.stringify({ message: '模型不存在' })), false);
+  assert.strictEqual(isThrottleResponse(200, '{"content":[]}'), false);
+});
+
+test('llmErrorMessage gives a friendly throttle notice after retries', () => {
+  const e = { statusCode: 400, message: '', responseBody: THROTTLE_BODY };
+  assert.match(llmErrorMessage(e), /🚦 模型繁忙（限流）/);
+});
+
+test('makeAnthropicFetch retries throttled 400 then succeeds', async () => {
+  let calls = 0;
+  const okBody = JSON.stringify({ content: [{ type: 'text', text: 'hi' }] });
+  const origFetch = global.fetch;
+  global.fetch = async () => {
+    calls += 1;
+    const throttled = calls <= 2; // 前两次限流，第三次成功
+    return new Response(throttled ? THROTTLE_BODY : okBody, {
+      status: throttled ? 400 : 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const f = makeAnthropicFetch({ baseDelayMs: 1, sleep: async () => {} });
+    const res = await f('http://x/messages', { method: 'POST' });
+    assert.strictEqual(calls, 3);
+    assert.strictEqual(res.status, 200);
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
+test('makeAnthropicFetch gives up after maxRetries and returns last 400', async () => {
+  let calls = 0;
+  const origFetch = global.fetch;
+  global.fetch = async () => {
+    calls += 1;
+    return new Response(THROTTLE_BODY, { status: 400, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const f = makeAnthropicFetch({ maxRetries: 3, baseDelayMs: 1, sleep: async () => {} });
+    const res = await f('http://x/messages', { method: 'POST' });
+    assert.strictEqual(calls, 4); // 1 次初始 + 3 次重试
+    assert.strictEqual(res.status, 400);
+  } finally {
+    global.fetch = origFetch;
+  }
 });
 
 test('deliver.escapeHtml escapes markup', () => {
